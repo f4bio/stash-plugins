@@ -1,0 +1,51 @@
+# APPNICENAME=Stash
+# APPDESCRIPTION=An organizer for your porn, written in Go
+services:
+  stash:
+    image: stashapp/stash:latest
+    container_name: stash
+    restart: unless-stopped
+    ## the container's port must be the same with the STASH_PORT in the environment section
+    ports:
+      - "9999:9999"
+    ## If you intend to use stash's DLNA functionality uncomment the below network mode and comment out the above ports section
+    # network_mode: host
+    logging:
+      driver: "json-file"
+      options:
+        max-file: "10"
+        max-size: "2m"
+    environment:
+      - STASH_STASH=/data/
+      - STASH_GENERATED=/generated/
+      - STASH_METADATA=/metadata/
+      - STASH_CACHE=/cache/
+      ## Adjust below to change default port (9999)
+      - STASH_PORT=9999
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      ## Adjust below paths (the left part) to your liking.
+      ## E.g. you can change ./config:/root/.stash to ./stash:/root/.stash
+      ## Keep configs, scrapers, and plugins here.
+      - stash-config:/root/.stash
+      ## Point this at your collection.
+      - stash-data:/data
+      ## This is where your stash's metadata lives
+      - stash-metadata:/metadata
+      ## Any other cache content.
+      - stash-cache:/cache
+      ## Where to store binary blob data (scene covers, images)
+      - stash-blobs:/blobs
+      ## Where to store generated content (screenshots,previews,transcodes,sprites)
+      - stash-generated:/generated
+      ## Mount plugins 
+      - ./plugins/renamerOnUpdate:/root/.stash/plugins/community/renamerOnUpdate
+      # - ...
+
+volumes:
+  stash-config:
+  stash-data:
+  stash-metadata:
+  stash-cache:
+  stash-blobs:
+  stash-generated:
