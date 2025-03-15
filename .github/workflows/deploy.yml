@@ -21,7 +21,7 @@ jobs:
       with:
         fetch-depth: '0'
     - run: |
-        bash build_site.sh _site/${{ github.ref_name }}
+        ./build_site.sh _site/${{ github.ref_name }}
     - uses: actions/upload-pages-artifact@v3
 
   deploy:
