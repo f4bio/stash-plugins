@@ -33,7 +33,7 @@ Using metadata from your Stash to rename/move your file.
 ## Requirement
 
 - Stash (v0.24+)
-- Python 3.6+ (Tested LIGHTLY on Python v3.11 Linux)
+- Python 3.6+ (Tested LIGHTLY on Python v3.12)
 - Request Module (<https://pypi.org/project/requests/>)
 
 ## Installation (manually)
