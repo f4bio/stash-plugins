@@ -38,12 +38,17 @@ Using metadata from your Stash to rename/move your file.
 
 ## Installation (manually)
 
-- Download the whole folder '**renamerOnUpdate**' (renamerOnUpdate_config.py, log.py, renamerOnUpdate.py/.yml)
+- Download the whole folder '**renamerOnUpdate**'
+  - `renamerOnUpdate_config.py`
+  - `log.py`
+  - `renamerOnUpdate.py`
+  - `renamerOnUpdate.yml`
 - Place it in your **plugins** folder (where the `config.yml` is)
 - Reload plugins (Settings > Plugins > Reload)
 - *renamerOnUpdate* appears
 
-**_ :exclamation: Make sure to configure the plugin by editing `renamerOnUpdate_config.py` before running it :exclamation: _**
+**_ :exclamation: Make sure to copy `renamerOnUpdate_config.py` to `config.py`
+and configure the plugin before running it :exclamation: _**
 
 ## Installation (via manager)
 
@@ -51,7 +56,8 @@ Using metadata from your Stash to rename/move your file.
 - Find **Available Plugins** and expand the package called **Community (stable)**.
 - Select `renamerOnUpdate` and click **Install**
 
-**_ :exclamation: Make sure to configure the plugin by editing `renamerOnUpdate_config.py` before running it :exclamation: _**
+**_ :exclamation: Make sure to copy `renamerOnUpdate_config.py` to `config.py`
+and configure the plugin before running it :exclamation: _**
 
 ## Usage
 
@@ -62,7 +68,8 @@ Using metadata from your Stash to rename/move your file.
 
 - By pressing the button in the Task menu.
   - It will go through each of your scenes.
-  - :warning: It's recommended to understand correctly how this plugin works, and use **DryRun** first.
+  - :warning: It's recommended to understand correctly how this plugin works,
+    and use **DryRun** first.
 
 ## Configuration
 
@@ -84,19 +91,24 @@ Using metadata from your Stash to rename/move your file.
 
 ## Custom configuration file
 
-Due to the nature of how plugin updates work, your `renamerOnUpdate_config.py` file will get replaced with the fresh copy resetting it to default values. To work around that you can create a custom config file and use it instead.
+Due to the nature of how plugin updates work, your `renamerOnUpdate_config.py`
+file will get replaced with the fresh copy resetting it to default values.
+To work around that you can create a custom config file and use it instead.
 
 - Create a copy of `renamerOnUpdate_config.py`
 - Rename your copy to `config.py`
 - Use the `config.py`(it will default to `renamerOnUpdate_config.py` if not found)
 
-> **Note**: Since `config.py` file is not tracked it won't get updated with new configuration options, so you will need to update it manually.
+> **Note**: Since `config.py` file is not tracked
+it won't get updated with new configuration options,
+so you will need to update it manually.
 
 ## renamerOnUpdate_config.py explained
 
 ### Template
 
-To modify your path/filename, you can use **variables**. These are elements that will change based on your **metadata**.
+To modify your path/filename, you can use **variables**.
+These are elements that will change based on your **metadata**.
 
 - Variables are represented with a word preceded with a `$` symbol. (E.g. `$date`)
 - If the metadata exists, this term will be replaced by it:
@@ -211,21 +223,25 @@ The file is moved to: `D:\Video\QmlnQnVja0J1bm55.mp4`
 
 #### Path - Special Variables
 
-`$studio_hierarchy` - Create the entire hierarchy of studio as folder (E.g. `../MindGeek/Brazzers/Hot And Mean/video.mp4`). Use your parent studio.
+`$studio_hierarchy` - Create the entire hierarchy of studio
+as folder (E.g. `../MindGeek/Brazzers/Hot And Mean/video.mp4`). Use your parent studio.
 
 `^*` - The current directory of the file.
 Explanation:
 
 - **If**: `p_default_template = r"^*\$performer"`
-- It creates a folder with a performer name in the current directory where the file is.
+- It creates a folder with a performer name
+in the current directory where the file is.
 - `C:\Temp\video.mp4` so  `^*=C:\Temp\`, result: `C:\Temp\Jane Doe\video.mp4`
-- If you don't use `prevent_consecutive` option, the plugin will create a new folder everytime (`C:\Temp\Jane Doe\Jane Doe\...\video.mp4`).
+- If you don't use `prevent_consecutive` option,
+the plugin will create a new folder everytime (`C:\Temp\Jane Doe\Jane Doe\...\video.mp4`).
 
 ### Advanced
 
 #### Groups
 
-You can group elements in the template with `{}`, it's used when you want to remove a character if a variable is null.
+You can group elements in the template with `{}`,
+it's used when you want to remove a character if a variable is null.
 
 Example:
 
@@ -237,7 +253,8 @@ Example:
 
 - `[$studio] $date - $title` -> `[Blender] - Big Buck Bunny`
 
-If you want to use the `-` only when you have the date, you can group the `-` with `$date`
+If you want to use the `-` only when you have the date,
+you can group the `-` with `$date`
 **Without** date in Stash:
 
 - `[$studio] {$date -} $title` -> `[Blender] Big Buck Bunny`
