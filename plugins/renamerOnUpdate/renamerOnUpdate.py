@@ -62,6 +62,14 @@ PLUGIN_DIR = FRAGMENT_SERVER["PluginDir"]
 PLUGIN_ARGS = FRAGMENT["args"].get("mode")
 
 # log.debug("{}".format(FRAGMENT))
+stash_scheme = FRAGMENT_SERVER["Scheme"]
+stash_domain = FRAGMENT_SERVER["Host"]
+stash_port = str(FRAGMENT_SERVER["Port"])
+if stash_domain == "0.0.0.0":
+    stash_domain = "localhost"
+stash = StashInterface(
+    {"scheme": stash_scheme, "host": stash_domain, "port": stash_port, "logger": log}
+)
 
 
 def callGraphQL(query, variables=None):
@@ -237,7 +245,8 @@ def graphql_findScene(perPage, direc="DESC") -> dict:
         }
     }
     result = callGraphQL(query, variables)
-    return result.get("findScenes")
+    result = result.get("findScenes")
+    log.debug("")
 
 
 # used to find duplicate
@@ -340,9 +349,7 @@ def find_diff_text(a: str, b: str):
         log.debug(f"OLD: {a}")
         log.debug(f"NEW: {b}")
     else:
-        log.debug(
-            f"Original: {a}\n- Charac: {minus}\n+ Charac: {addi}\n  Result: {b}"
-        )
+        log.debug(f"Original: {a}\n- Charac: {minus}\n+ Charac: {addi}\n  Result: {b}")
     return
 
 
@@ -407,9 +414,15 @@ def get_template_filename(scene: dict):
                     current_studio["parent_studio"]["name"]
                 ]
                 template_found = True
-            current_studio = graphql_getStudio(
+            current_studio = stash.find_studio(
                 current_studio.get("parent_studio")["id"]
             )
+            log.debug(
+                "get_template_filename(current_studio): {}".format(current_studio)
+            )
+            # current_studio = graphql_getStudio(
+            #     current_studio.get("parent_studio")["id"]
+            # )
 
     # Change by Tag
     tags = [x["name"] for x in scene["tags"]]
@@ -1147,9 +1160,7 @@ def file_rename(current_path: str, new_path: str, scene_info: dict):
                     try:
                         shutil.move(current_path, new_path)
                     except Exception as err:
-                        log.error(
-                            f"Something still prevents renaming the file. {err}"
-                        )
+                        log.error(f"Something still prevents renaming the file. {err}")
                         return 1
                 else:
                     log.error("A process prevents renaming the file.")
@@ -1422,10 +1433,19 @@ def renamer(scene_id, db_conn=None):
                 associated_rename(scene_information)
             if template.get("path"):
                 if "clean_tag" in template["path"]["option"]:
-                    graphql_removeScenesTag(
-                        [scene_information["scene_id"]],
-                        template["path"]["opt_details"]["clean_tag"],
+                    stash.update_scenes(
+                        {
+                            "ids": [scene_information["scene_id"]],
+                            "tag_ids": {
+                                "ids": template["path"]["opt_details"]["clean_tag"],
+                                "mode": "REMOVE",
+                            },
+                        }
                     )
+                    # graphql_removeScenesTag(
+                    #     [scene_information["scene_id"]],
+                    #     template["path"]["opt_details"]["clean_tag"],
+                    # )
         except Exception as err:
             log.error(f"Error during database operation ({err})")
             if not db_conn:
