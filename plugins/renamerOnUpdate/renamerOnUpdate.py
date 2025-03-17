@@ -8,8 +8,9 @@ import sys
 import time
 import traceback
 from datetime import datetime
-
 import requests
+import stashapi.log as log
+from stashapi.stashapp import StashInterface
 
 try:
     import psutil  # pip install psutil
@@ -25,12 +26,10 @@ try:
 except Exception:
     MODULE_UNIDECODE = False
 
-import log
-
 try:
     import config
 except Exception:
-    log.LogWarning(
+    log.warning(
         "Could not import ROU config file, did you rename the template file to 'config.py'? Defaulting to template config file"
     )
     import renamerOnUpdate_config as config
@@ -51,7 +50,7 @@ if DRY_RUN:
     if DRY_RUN_FILE and not config.dry_run_append:
         if os.path.exists(DRY_RUN_FILE):
             os.remove(DRY_RUN_FILE)
-    log.LogInfo("Dry mode on")
+    log.info("Dry mode on")
 
 START_TIME = time.time()
 FRAGMENT = json.loads(sys.stdin.read())
@@ -62,7 +61,7 @@ PLUGIN_DIR = FRAGMENT_SERVER["PluginDir"]
 
 PLUGIN_ARGS = FRAGMENT["args"].get("mode")
 
-# log.LogDebug("{}".format(FRAGMENT))
+# log.debug("{}".format(FRAGMENT))
 
 
 def callGraphQL(query, variables=None):
@@ -337,11 +336,11 @@ def find_diff_text(a: str, b: str):
             addi += s[-1]
             addi_ += 1
     if minus_ > 20 or addi_ > 20:
-        log.LogDebug(f"Diff Checker: +{addi_}; -{minus_};")
-        log.LogDebug(f"OLD: {a}")
-        log.LogDebug(f"NEW: {b}")
+        log.debug(f"Diff Checker: +{addi_}; -{minus_};")
+        log.debug(f"OLD: {a}")
+        log.debug(f"NEW: {b}")
     else:
-        log.LogDebug(
+        log.debug(
             f"Original: {a}\n- Charac: {minus}\n+ Charac: {addi}\n  Result: {b}"
         )
     return
@@ -376,7 +375,7 @@ def config_edit(name: str, state: bool):
                         continue
                 file_w.write(line)
     except PermissionError as err:
-        log.LogError(f"You don't have the permission to edit config.py ({err})")
+        log.error(f"You don't have the permission to edit config.py ({err})")
     return found
 
 
@@ -384,7 +383,7 @@ def check_longpath(path: str):
     # Trying to prevent error with long paths for Win10
     # https://docs.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation?tabs=cmd
     if len(path) > 240 and not IGNORE_PATH_LENGTH:
-        log.LogError(
+        log.error(
             f"The path is too long ({len(path)} > 240). You can look at 'order_field'/'ignore_path_length' in config."
         )
         return 1
@@ -591,7 +590,7 @@ def extract_info(scene: dict, template: None):
                 and PATH_KEEP_ALRPERF
             ):
                 scene_information["performer_path"] = perf["name"]
-                log.LogDebug(
+                log.debug(
                     f"[PATH] Keeping the current name of the performer '{perf['name']}'"
                 )
         perf_rating = sort_rating(perf_rating)
@@ -622,12 +621,12 @@ def extract_info(scene: dict, template: None):
             scene_information["performer_path"] = perf_list[0]
         if len(perf_list) > PERFORMER_LIMIT:
             if not PERFORMER_LIMIT_KEEP:
-                log.LogInfo(
+                log.info(
                     f"More than {PERFORMER_LIMIT} performer(s). Ignoring $performer"
                 )
                 perf_list = []
             else:
-                log.LogInfo(f"Limited the amount of performer to {PERFORMER_LIMIT}")
+                log.info(f"Limited the amount of performer to {PERFORMER_LIMIT}")
                 perf_list = perf_list[0:PERFORMER_LIMIT]
         scene_information["performer"] = PERFORMER_SPLITCHAR.join(perf_list)
         if perf_list:
@@ -755,18 +754,18 @@ def replace_text(text: str):
             if new[1] == "regex":
                 tmp = re.sub(old, new[0], text)
                 if tmp != text:
-                    log.LogDebug(f"Regex matched: {text} -> {tmp}")
+                    log.debug(f"Regex matched: {text} -> {tmp}")
             else:
                 if new[1] == "word":
                     tmp = re.sub(rf"([\s_-])({old})([\s_-])", f"\\1{new[0]}\\3", text)
                 elif new[1] == "any":
                     tmp = text.replace(old, new[0])
                 if tmp != text:
-                    log.LogDebug(f"'{old}' changed with '{new[0]}'")
+                    log.debug(f"'{old}' changed with '{new[0]}'")
         else:
             tmp = re.sub(rf"([\s_-])({old})([\s_-])", f"\\1{new[0]}\\3", text)
             if tmp != text:
-                log.LogDebug(f"'{old}' changed with '{new[0]}'")
+                log.debug(f"'{old}' changed with '{new[0]}'")
         text = tmp
     return tmp
 
@@ -812,7 +811,7 @@ def field_replacer(text: str, scene_information: dict):
                     f"^{scene_information['performer'].lower()}",
                     scene_information["title"].lower(),
                 ):
-                    log.LogDebug(
+                    log.debug(
                         "Ignoring the performer field because it's already in start of title"
                     )
                     result = result.replace("$performer", "")
@@ -1008,9 +1007,9 @@ def create_new_path(scene_info: dict, template: dict):
 def connect_db(path: str):
     try:
         sqliteConnection = sqlite3.connect(path, timeout=10)
-        log.LogDebug("Python successfully connected to SQLite")
+        log.debug("Python successfully connected to SQLite")
     except sqlite3.Error as error:
-        log.LogError(f"FATAL SQLITE Error: {error}")
+        log.error(f"FATAL SQLITE Error: {error}")
         return None
     return sqliteConnection
 
@@ -1018,15 +1017,15 @@ def connect_db(path: str):
 def checking_duplicate_db(scene_info: dict):
     scenes = graphql_findScenebyPath(scene_info["final_path"], "EQUALS")
     if scenes["count"] > 0:
-        log.LogError("Duplicate path detected")
+        log.error("Duplicate path detected")
         for dupl_row in scenes["scenes"]:
-            log.LogWarning(f"Identical path: [{dupl_row['id']}]")
+            log.warning(f"Identical path: [{dupl_row['id']}]")
         return 1
     scenes = graphql_findScenebyPath(scene_info["new_filename"], "EQUALS")
     if scenes["count"] > 0:
         for dupl_row in scenes["scenes"]:
             if dupl_row["id"] != scene_info["scene_id"]:
-                log.LogWarning(f"Duplicate filename: [{dupl_row['id']}]")
+                log.warning(f"Duplicate filename: [{dupl_row['id']}]")
 
 
 def db_rename(stash_db: sqlite3.Connection, scene_info):
@@ -1101,7 +1100,7 @@ def db_rename_refactor(stash_db: sqlite3.Connection, scene_info):
                 file_id = f[0]
                 break
         if file_id:
-            # log.LogDebug(f"UPDATE files SET basename={scene_info['new_filename']}, parent_folder_id={folder_id}, updated_at={mod_time} WHERE id={file_id};")
+            # log.debug(f"UPDATE files SET basename={scene_info['new_filename']}, parent_folder_id={folder_id}, updated_at={mod_time} WHERE id={file_id};")
             cursor.execute(
                 "UPDATE files SET basename=?, parent_folder_id=?, updated_at=? WHERE id=?;",
                 [scene_info["new_filename"], folder_id, mod_time, file_id],
@@ -1120,26 +1119,26 @@ def db_rename_refactor(stash_db: sqlite3.Connection, scene_info):
 def file_rename(current_path: str, new_path: str, scene_info: dict):
     # OS Rename
     if not os.path.isfile(current_path):
-        log.LogWarning(f"[OS] File doesn't exist in your Disk/Drive ({current_path})")
+        log.warning(f"[OS] File doesn't exist in your Disk/Drive ({current_path})")
         return 1
     # moving/renaming
     new_dir = os.path.dirname(new_path)
     current_dir = os.path.dirname(current_path)
     if not os.path.exists(new_dir):
-        log.LogInfo(f"Creating folder because it don't exist ({new_dir})")
+        log.info(f"Creating folder because it don't exist ({new_dir})")
         os.makedirs(new_dir)
     try:
         shutil.move(current_path, new_path)
     except PermissionError as err:
         if "[WinError 32]" in str(err) and MODULE_PSUTIL:
-            log.LogWarning(
+            log.warning(
                 "A process is using this file (Probably FFMPEG), trying to find it ..."
             )
             # Find which process accesses the file, it's ffmpeg for sure...
             process_use = has_handle(current_path, PROCESS_ALLRESULT)
             if process_use:
                 # Terminate the process then try again to rename
-                log.LogDebug(f"Process that uses this file: {process_use}")
+                log.debug(f"Process that uses this file: {process_use}")
                 if PROCESS_KILL:
                     p = psutil.Process(process_use.pid)
                     p.terminate()
@@ -1148,19 +1147,19 @@ def file_rename(current_path: str, new_path: str, scene_info: dict):
                     try:
                         shutil.move(current_path, new_path)
                     except Exception as err:
-                        log.LogError(
+                        log.error(
                             f"Something still prevents renaming the file. {err}"
                         )
                         return 1
                 else:
-                    log.LogError("A process prevents renaming the file.")
+                    log.error("A process prevents renaming the file.")
                     return 1
         else:
-            log.LogError(f"Something prevents renaming the file. {err}")
+            log.error(f"Something prevents renaming the file. {err}")
             return 1
     # checking if the move/rename work correctly
     if os.path.isfile(new_path):
-        log.LogInfo(f"[OS] File Renamed! ({current_path} -> {new_path})")
+        log.info(f"[OS] File Renamed! ({current_path} -> {new_path})")
         if LOGFILE:
             try:
                 with open(LOGFILE, "a", encoding="utf-8") as f:
@@ -1169,23 +1168,23 @@ def file_rename(current_path: str, new_path: str, scene_info: dict):
                     )
             except Exception as err:
                 shutil.move(new_path, current_path)
-                log.LogError(
+                log.error(
                     f"Restoring the original path, error writing the logfile: {err}"
                 )
                 return 1
         if REMOVE_EMPTY_FOLDER:
             with os.scandir(current_dir) as it:
                 if not any(it):
-                    log.LogInfo(f"Removing empty folder ({current_dir})")
+                    log.info(f"Removing empty folder ({current_dir})")
                     try:
                         os.rmdir(current_dir)
                     except Exception as err:
-                        log.logWarning(
+                        log.warning(
                             f"Fail to delete empty folder {current_dir} - {err}"
                         )
     else:
         # I don't think it's possible.
-        log.LogError(f"[OS] Failed to rename the file ? {new_path}")
+        log.error(f"[OS] Failed to rename the file ? {new_path}")
         return 1
 
 
@@ -1198,19 +1197,19 @@ def associated_rename(scene_info: dict):
                 try:
                     shutil.move(p, p_new)
                 except Exception as err:
-                    log.LogError(
+                    log.error(
                         f"Something prevents renaming this file '{p}' - err: {err}"
                     )
                     continue
             if os.path.isfile(p_new):
-                log.LogInfo(f"[OS] Associate file renamed ({p_new})")
+                log.info(f"[OS] Associate file renamed ({p_new})")
                 if LOGFILE:
                     try:
                         with open(LOGFILE, "a", encoding="utf-8") as f:
                             f.write(f"{scene_info['scene_id']}|{p}|{p_new}\n")
                     except Exception as err:
                         shutil.move(p_new, p)
-                        log.LogError(
+                        log.error(
                             f"Restoring the original name, error writing the logfile: {err}"
                         )
 
@@ -1228,7 +1227,7 @@ def renamer(scene_id, db_conn=None):
         and not stash_scene["organized"]
         and not PATH_NON_ORGANIZED
     ):
-        log.LogDebug(f"[{scene_id}] Scene ignored (not organized)")
+        log.debug(f"[{scene_id}] Scene ignored (not organized)")
         return
 
     # refractor file support
@@ -1272,7 +1271,7 @@ def renamer(scene_id, db_conn=None):
         template["path"] = get_template_path(stash_scene)
         if not template["path"].get("destination"):
             if config.p_use_default_template:
-                log.LogDebug("[PATH] Using default template")
+                log.debug("[PATH] Using default template")
                 template["path"] = {
                     "destination": config.p_default_template,
                     "option": [],
@@ -1283,20 +1282,20 @@ def renamer(scene_id, db_conn=None):
         else:
             if template["path"].get("option"):
                 if "dry_run" in template["path"]["option"] and not DRY_RUN:
-                    log.LogInfo("Dry-Run on (activate by option)")
+                    log.info("Dry-Run on (activate by option)")
                     option_dryrun = True
         if not template["filename"] and config.use_default_template:
-            log.LogDebug("[FILENAME] Using default template")
+            log.debug("[FILENAME] Using default template")
             template["filename"] = config.default_template
 
         if not template["filename"] and not template["path"]:
-            log.LogWarning(f"[{scene_id}] No template for this scene.")
+            log.warning(f"[{scene_id}] No template for this scene.")
             return
 
-        # log.LogDebug("Using this template: {}".format(filename_template))
+        # log.debug("Using this template: {}".format(filename_template))
         scene_information = extract_info(stash_scene, template)
-        log.LogDebug(f"[{scene_id}] Scene information: {scene_information}")
-        log.LogDebug(f"[{scene_id}] Template: {template}")
+        log.debug(f"[{scene_id}] Scene information: {scene_information}")
+        log.debug(f"[{scene_id}] Template: {template}")
 
         scene_information["scene_id"] = scene_id
         scene_information["file_index"] = i
@@ -1305,7 +1304,7 @@ def renamer(scene_id, db_conn=None):
             if removed_field:
                 if scene_information.get(removed_field.replace("$", "")):
                     del scene_information[removed_field.replace("$", "")]
-                    log.LogWarning(f"removed {removed_field} to reduce the length path")
+                    log.warning(f"removed {removed_field} to reduce the length path")
                 else:
                     continue
             if template["filename"]:
@@ -1339,28 +1338,28 @@ def renamer(scene_id, db_conn=None):
                     )
             continue
 
-        # log.LogDebug(f"Filename: {scene_information['current_filename']} -> {scene_information['new_filename']}")
-        # log.LogDebug(f"Path: {scene_information['current_directory']} -> {scene_information['new_directory']}")
+        # log.debug(f"Filename: {scene_information['current_filename']} -> {scene_information['new_filename']}")
+        # log.debug(f"Path: {scene_information['current_directory']} -> {scene_information['new_directory']}")
 
         if scene_information["final_path"] == scene_information["current_path"]:
-            log.LogInfo(f"Everything is ok. ({scene_information['current_filename']})")
+            log.info(f"Everything is ok. ({scene_information['current_filename']})")
             continue
 
         if scene_information["current_directory"] != scene_information["new_directory"]:
-            log.LogInfo("File will be moved to another directory")
-            log.LogDebug(f"[OLD path] {scene_information['current_path']}")
-            log.LogDebug(f"[NEW path] {scene_information['final_path']}")
+            log.info("File will be moved to another directory")
+            log.debug(f"[OLD path] {scene_information['current_path']}")
+            log.debug(f"[NEW path] {scene_information['final_path']}")
 
         if scene_information["current_filename"] != scene_information["new_filename"]:
-            log.LogInfo("The filename will be changed")
+            log.info("The filename will be changed")
             if ALT_DIFF_DISPLAY:
                 find_diff_text(
                     scene_information["current_filename"],
                     scene_information["new_filename"],
                 )
             else:
-                log.LogDebug(f"[OLD filename] {scene_information['current_filename']}")
-                log.LogDebug(f"[NEW filename] {scene_information['new_filename']}")
+                log.debug(f"[OLD filename] {scene_information['current_filename']}")
+                log.debug(f"[NEW filename] {scene_information['new_filename']}")
 
         if (DRY_RUN or option_dryrun) and LOGFILE:
             with open(DRY_RUN_FILE, "a", encoding="utf-8") as f:
@@ -1371,7 +1370,7 @@ def renamer(scene_id, db_conn=None):
         # check if there is already a file where the new path is
         err = checking_duplicate_db(scene_information)
         while err and scene_information["file_index"] <= len(DUPLICATE_SUFFIX):
-            log.LogDebug("Duplicate filename detected, increasing file index")
+            log.debug("Duplicate filename detected, increasing file index")
             scene_information["file_index"] = scene_information["file_index"] + 1
             scene_information["new_filename"] = create_new_filename(
                 scene_information, template["filename"]
@@ -1379,8 +1378,8 @@ def renamer(scene_id, db_conn=None):
             scene_information["final_path"] = os.path.join(
                 scene_information["new_directory"], scene_information["new_filename"]
             )
-            log.LogDebug(f"[NEW filename] {scene_information['new_filename']}")
-            log.LogDebug(f"[NEW path] {scene_information['final_path']}")
+            log.debug(f"[NEW filename] {scene_information['new_filename']}")
+            log.debug(f"[NEW path] {scene_information['final_path']}")
             err = checking_duplicate_db(scene_information)
         # abort
         if err:
@@ -1408,7 +1407,7 @@ def renamer(scene_id, db_conn=None):
                 else:
                     db_rename(stash_db, scene_information)
             except Exception as err:
-                log.LogError(
+                log.error(
                     f"error when trying to update the database ({err}), revert the move..."
                 )
                 err = file_rename(
@@ -1428,48 +1427,48 @@ def renamer(scene_id, db_conn=None):
                         template["path"]["opt_details"]["clean_tag"],
                     )
         except Exception as err:
-            log.LogError(f"Error during database operation ({err})")
+            log.error(f"Error during database operation ({err})")
             if not db_conn:
-                log.LogDebug("[SQLITE] Database closed")
+                log.debug("[SQLITE] Database closed")
                 stash_db.close()
             continue
     if not db_conn and stash_db:
         stash_db.close()
-        log.LogInfo("[SQLITE] Database updated and closed!")
+        log.info("[SQLITE] Database updated and closed!")
 
 
 def exit_plugin(msg=None, err=None):
     if msg is None and err is None:
         msg = "plugin ended"
-    log.LogDebug("Execution time: {}s".format(round(time.time() - START_TIME, 5)))
+    log.debug("Execution time: {}s".format(round(time.time() - START_TIME, 5)))
     output_json = {"output": msg, "error": err}
     print(json.dumps(output_json))
     sys.exit()
 
 
 if PLUGIN_ARGS:
-    log.LogDebug("--Starting Plugin 'Renamer'--")
+    log.debug("--Starting Plugin 'Renamer'--")
     if "bulk" not in PLUGIN_ARGS:
         if "enable" in PLUGIN_ARGS:
-            log.LogInfo("Enable hook")
+            log.info("Enable hook")
             success = config_edit("enable_hook", True)
         elif "disable" in PLUGIN_ARGS:
-            log.LogInfo("Disable hook")
+            log.info("Disable hook")
             success = config_edit("enable_hook", False)
         elif "dryrun" in PLUGIN_ARGS:
             if config.dry_run:
-                log.LogInfo("Disable dryrun")
+                log.info("Disable dryrun")
                 success = config_edit("dry_run", False)
             else:
-                log.LogInfo("Enable dryrun")
+                log.info("Enable dryrun")
                 success = config_edit("dry_run", True)
         if not success:
-            log.LogError("Script failed to change the value")
+            log.error("Script failed to change the value")
         exit_plugin("script finished")
 else:
     if not config.enable_hook:
         exit_plugin("Hook disabled")
-    log.LogDebug("--Starting Hook 'Renamer'--")
+    log.debug("--Starting Hook 'Renamer'--")
     FRAGMENT_HOOK_TYPE = FRAGMENT["args"]["hookContext"]["type"]
     FRAGMENT_SCENE_ID = FRAGMENT["args"]["hookContext"]["id"]
 
@@ -1575,27 +1574,27 @@ if DB_VERSION >= DB_VERSION_SCENE_STUDIO_CODE:
 if PLUGIN_ARGS:
     if "bulk" in PLUGIN_ARGS:
         scenes = graphql_findScene(config.batch_number_scene, "ASC")
-        log.LogDebug(f"Count scenes: {len(scenes['scenes'])}")
+        log.debug(f"Count scenes: {len(scenes['scenes'])}")
         progress = 0
         progress_step = 1 / len(scenes["scenes"])
         stash_db = connect_db(STASH_DATABASE)
         if stash_db is None:
             exit_plugin()
         for scene in scenes["scenes"]:
-            log.LogDebug(f"** Checking scene: {scene['title']} - {scene['id']} **")
+            log.debug(f"** Checking scene: {scene['title']} - {scene['id']} **")
             try:
                 renamer(scene, stash_db)
             except Exception as err:
-                log.LogError(f"main function error: {err}")
+                log.error(f"main function error: {err}")
             progress += progress_step
-            log.LogProgress(progress)
+            log.progess(progress)
         stash_db.close()
-        log.LogInfo("[SQLITE] Database closed!")
+        log.info("[SQLITE] Database closed!")
 else:
     try:
         renamer(FRAGMENT_SCENE_ID)
     except Exception as err:
-        log.LogError(f"main function error: {err}")
+        log.error(f"main function error: {err}")
         traceback.print_exc()
 
 exit_plugin("Successful!")
