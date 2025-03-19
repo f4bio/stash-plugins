@@ -11,29 +11,37 @@ from datetime import datetime
 import requests
 import stashapi.log as log
 from stashapi.stashapp import StashInterface
+import renamerOnUpdate_config as defaultConfig
 
-try:
-    import psutil  # pip install psutil
+def is_module_available(module_name: str) -> bool:
+  """
+  Checks whether a specified module is available for import.
 
-    MODULE_PSUTIL = True
-except Exception:
-    MODULE_PSUTIL = False
+  Args:
+      module_name (str): The name of the module to check.
 
-try:
-    import unidecode  # pip install Unidecode
+  Returns:
+      bool: True if the module is available, False otherwise.
+  """
+  try:
+    __import__(module_name)
+    return True
+  except ImportError:
+    return False
 
-    MODULE_UNIDECODE = True
-except Exception:
-    MODULE_UNIDECODE = False
 
-try:
-    import config
-except Exception:
-    log.warning(
-        "Could not import ROU config file, did you rename the template file to 'config.py'? Defaulting to template config file"
-    )
-    import renamerOnUpdate_config as config
+IS_UNIDECODE_AVAILABLE: bool = is_module_available("unidecode")
+IS_PSUTIL_AVAILABLE: bool = is_module_available("psutil")
+IS_CONFIG_AVAILABLE: bool = is_module_available("config")
 
+if IS_UNIDECODE_AVAILABLE:
+  import unidecode  # pip install unidecode
+
+if IS_PSUTIL_AVAILABLE:
+  import psutil  # pip install psutil
+
+if IS_CONFIG_AVAILABLE:
+  import config
 
 DB_VERSION_FILE_REFACTOR = 32
 DB_VERSION_SCENE_STUDIO_CODE = 38
@@ -71,265 +79,6 @@ stash = StashInterface(
     {"scheme": stash_scheme, "host": stash_domain, "port": stash_port, "logger": log}
 )
 
-
-def callGraphQL(query, variables=None):
-    # Session cookie for authentication
-    graphql_port = str(FRAGMENT_SERVER["Port"])
-    graphql_scheme = FRAGMENT_SERVER["Scheme"]
-    graphql_cookies = {"session": FRAGMENT_SERVER["SessionCookie"]["Value"]}
-    graphql_headers = {
-        "Accept-Encoding": "gzip, deflate, br",
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-        "Connection": "keep-alive",
-        "DNT": "1",
-    }
-    graphql_domain = FRAGMENT_SERVER["Host"]
-    if graphql_domain == "0.0.0.0":
-        graphql_domain = "localhost"
-    # Stash GraphQL endpoint
-    graphql_url = f"{graphql_scheme}://{graphql_domain}:{graphql_port}/graphql"
-
-    json = {"query": query}
-    if variables is not None:
-        json["variables"] = variables
-    try:
-        response = requests.post(
-            graphql_url,
-            json=json,
-            headers=graphql_headers,
-            cookies=graphql_cookies,
-            timeout=20,
-        )
-    except Exception as e:
-        exit_plugin(err=f"[FATAL] Error with the graphql request {e}")
-    if response.status_code == 200:
-        result = response.json()
-        if result.get("error"):
-            for error in result["error"]["errors"]:
-                raise Exception(f"GraphQL error: {error}")
-            return None
-        if result.get("data"):
-            return result.get("data")
-    elif response.status_code == 401:
-        exit_plugin(err="HTTP Error 401, Unauthorised.")
-    else:
-        raise ConnectionError(
-            f"GraphQL query failed: {response.status_code} - {response.content}"
-        )
-
-
-def graphql_getScene(scene_id):
-    query = (
-        """
-    query FindScene($id: ID!, $checksum: String) {
-        findScene(id: $id, checksum: $checksum) {
-            ...SceneData
-        }
-    }
-    fragment SceneData on Scene {
-        id
-        title
-        date
-        rating100
-        stash_ids {
-            endpoint
-            stash_id
-        }
-        organized"""
-        + FILE_QUERY
-        + """
-        studio {
-            id
-            name
-            parent_studio {
-                id
-                name
-            }
-        }
-        tags {
-            id
-            name
-        }
-        performers {
-            id
-            name
-            gender
-            favorite
-            rating100
-            stash_ids{
-                endpoint
-                stash_id
-            }
-        }
-        movies {
-            movie {
-                name
-                date
-            }
-            scene_index
-        }
-    }
-    """
-    )
-    variables = {"id": scene_id}
-    result = callGraphQL(query, variables)
-    return result.get("findScene")
-
-
-# used for bulk
-def graphql_findScene(perPage, direc="DESC") -> dict:
-    query = (
-        """
-    query FindScenes($filter: FindFilterType) {
-        findScenes(filter: $filter) {
-            count
-            scenes {
-                ...SlimSceneData
-            }
-        }
-    }
-    fragment SlimSceneData on Scene {
-        id
-        title
-        date
-        rating100
-        organized
-        stash_ids {
-            endpoint
-            stash_id
-        }
-    """
-        + FILE_QUERY
-        + """
-        studio {
-            id
-            name
-            parent_studio {
-                id
-                name
-            }
-        }
-        tags {
-            id
-            name
-        }
-        performers {
-            id
-            name
-            gender
-            favorite
-            rating100
-            stash_ids{
-                endpoint
-                stash_id
-            }
-        }
-        movies {
-            movie {
-                name
-                date
-            }
-            scene_index
-        }
-    }
-    """
-    )
-    # ASC DESC
-    variables = {
-        "filter": {
-            "direction": direc,
-            "page": 1,
-            "per_page": perPage,
-            "sort": "updated_at",
-        }
-    }
-    result = callGraphQL(query, variables)
-    result = result.get("findScenes")
-    log.debug("")
-
-
-# used to find duplicate
-def graphql_findScenebyPath(path, modifier) -> dict:
-    query = """
-    query FindScenes($filter: FindFilterType, $scene_filter: SceneFilterType) {
-        findScenes(filter: $filter, scene_filter: $scene_filter) {
-            count
-            scenes {
-                id
-                title
-            }
-        }
-    }
-    """
-    # ASC DESC
-    variables = {
-        "filter": {"direction": "ASC", "page": 1, "per_page": 40, "sort": "updated_at"},
-        "scene_filter": {"path": {"modifier": modifier, "value": path}},
-    }
-    result = callGraphQL(query, variables)
-    return result.get("findScenes")
-
-
-def graphql_getConfiguration():
-    query = """
-        query Configuration {
-            configuration {
-                general {
-                    databasePath
-                }
-            }
-        }
-    """
-    result = callGraphQL(query)
-    return result.get("configuration")
-
-
-def graphql_getStudio(studio_id):
-    query = """
-        query FindStudio($id:ID!) {
-            findStudio(id: $id) {
-                id
-                name
-                parent_studio {
-                    id
-                    name
-                }
-            }
-        }
-    """
-    variables = {"id": studio_id}
-    result = callGraphQL(query, variables)
-    return result.get("findStudio")
-
-
-def graphql_removeScenesTag(id_scenes: list, id_tags: list):
-    query = """
-    mutation BulkSceneUpdate($input: BulkSceneUpdateInput!) {
-        bulkSceneUpdate(input: $input) {
-            id
-        }
-    }
-    """
-    variables = {
-        "input": {"ids": id_scenes, "tag_ids": {"ids": id_tags, "mode": "REMOVE"}}
-    }
-    result = callGraphQL(query, variables)
-    return result
-
-
-def graphql_getBuild():
-    query = """
-        {
-            systemStatus {
-                databaseSchema
-            }
-        }
-    """
-    result = callGraphQL(query)
-    return result["systemStatus"]["databaseSchema"]
-
-
 def find_diff_text(a: str, b: str):
     addi = minus = stay = ""
     minus_ = addi_ = 0
@@ -363,7 +112,7 @@ def has_handle(fpath, all_result=False):
                         lst.append(proc)
                     else:
                         return proc
-        except Exception:
+        except BaseException:
             pass
     return lst
 
@@ -381,8 +130,8 @@ def config_edit(name: str, state: bool):
                         found += 1
                         continue
                 file_w.write(line)
-    except PermissionError as err:
-        log.error(f"You don't have the permission to edit config.py ({err})")
+    except PermissionError as _err:
+        log.error(f"You don't have the permission to edit config.py ({_err})")
     return found
 
 
@@ -958,7 +707,7 @@ def create_new_filename(scene_info: dict, template: str):
         new_filename = re.sub(f"[{FILENAME_REMOVECHARACTER}]+", "", new_filename)
 
     # Trying to remove non standard character
-    if MODULE_UNIDECODE and UNICODE_USE:
+    if IS_UNIDECODE_AVAILABLE and UNICODE_USE:
         new_filename = unidecode.unidecode(new_filename, errors="preserve")
     else:
         # Using typewriter for Apostrophe

@@ -1,0 +1,3 @@
+<component name="DependencyValidationManager">
+  <scope name="Python" pattern="!file[stash-plugins]:.devcontainer//*&amp;&amp;!file[stash-plugins]:.github/workflows//*&amp;&amp;!file[stash-plugins]:.idea//*" />
+</component>

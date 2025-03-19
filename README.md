@@ -14,5 +14,5 @@ https://f4bio.github.io/stash-plugins/main/index.yml
 
 `renamerOnUpdate`
 
-- Continuation of once offical, now deprecated [upstream stash-plugin](https://github.com/stashapp/CommunityScripts/tree/main/archive/renamerOnUpdate)
+- Continuation of once official, now deprecated [upstream stash-plugin](https://github.com/stashapp/CommunityScripts/tree/main/archive/renamerOnUpdate)
 - Using metadata from your Stash to rename/move your file.
