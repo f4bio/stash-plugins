@@ -6,7 +6,7 @@ Index/Source URL:
 https://f4bio.github.io/stash-plugins/main/index.yml
 ```
 
-<small>_This repo was created based on [feederbox826](https://github.com/feederbox826)'s [template plugin repo](https://github.com/feederbox826/plugins) - thanks!_</small>
+<small>_This repo was created based on [feederbox826](https://github.com/feederbox826)'s [repo](https://github.com/feederbox826/plugins) - thanks!_</small>
 
 ## Plugins
 
