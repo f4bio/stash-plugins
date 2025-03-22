@@ -10,24 +10,26 @@ import traceback
 from datetime import datetime
 import requests
 import stashapi.log as log
+from graphql_custom import graphql_getBuild
 from stashapi.stashapp import StashInterface
 import renamerOnUpdate_config as defaultConfig
 
+
 def is_module_available(module_name: str) -> bool:
-  """
-  Checks whether a specified module is available for import.
+    """
+    Checks whether a specified module is available for import.
 
-  Args:
-      module_name (str): The name of the module to check.
+    Args:
+        module_name (str): The name of the module to check.
 
-  Returns:
-      bool: True if the module is available, False otherwise.
-  """
-  try:
-    __import__(module_name)
-    return True
-  except ImportError:
-    return False
+    Returns:
+        bool: True if the module is available, False otherwise.
+    """
+    try:
+        __import__(module_name)
+        return True
+    except ImportError:
+        return False
 
 
 IS_UNIDECODE_AVAILABLE: bool = is_module_available("unidecode")
@@ -35,13 +37,15 @@ IS_PSUTIL_AVAILABLE: bool = is_module_available("psutil")
 IS_CONFIG_AVAILABLE: bool = is_module_available("config")
 
 if IS_UNIDECODE_AVAILABLE:
-  import unidecode  # pip install unidecode
+    import unidecode  # pip install unidecode
 
 if IS_PSUTIL_AVAILABLE:
-  import psutil  # pip install psutil
+    import psutil  # pip install psutil
 
 if IS_CONFIG_AVAILABLE:
-  import config
+    import config as config
+else:
+    config = defaultConfig
 
 DB_VERSION_FILE_REFACTOR = 32
 DB_VERSION_SCENE_STUDIO_CODE = 38
@@ -66,7 +70,6 @@ FRAGMENT = json.loads(sys.stdin.read())
 FRAGMENT_SERVER = FRAGMENT["server_connection"]
 PLUGIN_DIR = FRAGMENT_SERVER["PluginDir"]
 
-
 PLUGIN_ARGS = FRAGMENT["args"].get("mode")
 
 # log.debug("{}".format(FRAGMENT))
@@ -78,6 +81,7 @@ if stash_domain == "0.0.0.0":
 stash = StashInterface(
     {"scheme": stash_scheme, "host": stash_domain, "port": stash_port, "logger": log}
 )
+
 
 def find_diff_text(a: str, b: str):
     addi = minus = stay = ""
@@ -184,6 +188,8 @@ def get_template_filename(scene: dict):
 
 
 def get_template_path(scene: dict):
+    # log.debug("scene: {}".format(scene))
+
     template = {"destination": "", "option": [], "opt_details": {}}
     # Change by Path
     if config.p_path_templates:
@@ -194,14 +200,14 @@ def get_template_path(scene: dict):
 
     # Change by Studio
     if scene.get("studio") and config.p_studio_templates:
-        if config.p_studio_templates.get(scene["studio"]["name"]):
-            template["destination"] = config.p_studio_templates[scene["studio"]["name"]]
-        # by Parent
-        if scene["studio"].get("parent_studio"):
-            if config.p_studio_templates.get(scene["studio"]["name"]):
-                template["destination"] = config.p_studio_templates[
-                    scene["studio"]["name"]
-                ]
+        if "name" in scene["studio"]:
+            studio_name = scene["studio"]["name"]
+            if config.p_studio_templates.get(studio_name):
+                template["destination"] = config.p_studio_templates[studio_name]
+            # by Parent
+            if scene["studio"].get("parent_studio"):
+                if config.p_studio_templates.get(studio_name):
+                    template["destination"] = config.p_studio_templates[studio_name]
 
     # Change by Tag
     tags = [x["name"] for x in scene["tags"]]
@@ -329,32 +335,34 @@ def extract_info(scene: dict, template: None):
             elif "UNDEFINED" in PERFORMER_IGNOREGENDER:
                 continue
             # path related
-            if template.get("path"):
-                if "inverse_performer" in template["path"]["option"]:
-                    perf["name"] = re.sub(
-                        r"([a-zA-Z]+)(\s)([a-zA-Z]+)", r"\3 \1", perf["name"]
+            if "name" in perf:
+                perf_name = perf["name"]
+                if template.get("path"):
+                    if "inverse_performer" in template["path"]["option"]:
+                        perf_name = re.sub(
+                            r"([a-zA-Z]+)(\s)([a-zA-Z]+)", r"\3 \1", perf_name
+                        )
+                perf_list.append(perf_name)
+                if perf.get("rating100"):
+                    if perf_rating.get(str(perf["rating100"])) is None:
+                        perf_rating[str(perf["rating100"])] = []
+                    perf_rating[str(perf["rating100"])].append(perf_name)
+                else:
+                    perf_rating["0"].append(perf_name)
+                if perf.get("favorite"):
+                    perf_favorite["yes"].append(perf_name)
+                else:
+                    perf_favorite["no"].append(perf_name)
+                # if the path already contains the name we keep this one
+                if (
+                    perf_name in scene_information["current_path_split"]
+                    and scene_information.get("performer_path") is None
+                    and PATH_KEEP_ALRPERF
+                ):
+                    scene_information["performer_path"] = perf_name
+                    log.debug(
+                        f"[PATH] Keeping the current name of the performer '{perf['name']}'"
                     )
-            perf_list.append(perf["name"])
-            if perf.get("rating100"):
-                if perf_rating.get(str(perf["rating100"])) is None:
-                    perf_rating[str(perf["rating100"])] = []
-                perf_rating[str(perf["rating100"])].append(perf["name"])
-            else:
-                perf_rating["0"].append(perf["name"])
-            if perf.get("favorite"):
-                perf_favorite["yes"].append(perf["name"])
-            else:
-                perf_favorite["no"].append(perf["name"])
-            # if the path already contains the name we keep this one
-            if (
-                perf["name"] in scene_information["current_path_split"]
-                and scene_information.get("performer_path") is None
-                and PATH_KEEP_ALRPERF
-            ):
-                scene_information["performer_path"] = perf["name"]
-                log.debug(
-                    f"[PATH] Keeping the current name of the performer '{perf['name']}'"
-                )
         perf_rating = sort_rating(perf_rating)
         # sort performer
         if PERFORMER_SORT == "rating":
@@ -395,9 +403,11 @@ def extract_info(scene: dict, template: None):
             for p in perf_list:
                 for perf in scene["performers"]:
                     # todo support other db that stashdb ?
-                    if p == perf["name"] and perf.get("stash_ids"):
-                        perf_list_stashid.append(perf["stash_ids"][0]["stash_id"])
-                        break
+                    if "name" in perf:
+                        perf_name = perf["name"]
+                        if p == perf_name and perf.get("stash_ids"):
+                            perf_list_stashid.append(perf["stash_ids"][0]["stash_id"])
+                            break
             scene_information["stashid_performer"] = PERFORMER_SPLITCHAR.join(
                 perf_list_stashid
             )
@@ -408,34 +418,36 @@ def extract_info(scene: dict, template: None):
 
     # Grab Studio name
     if scene.get("studio"):
-        if SQUEEZE_STUDIO_NAMES:
-            scene_information["studio"] = scene["studio"]["name"].replace(" ", "")
-        else:
-            scene_information["studio"] = scene["studio"]["name"]
-        scene_information["studio_family"] = scene_information["studio"]
-        studio_hierarchy = [scene_information["studio"]]
-        # Grab Parent name
-        if scene["studio"].get("parent_studio"):
+        if "name" in scene["studio"]:
+            studio_name = scene["studio"]["name"]
             if SQUEEZE_STUDIO_NAMES:
-                scene_information["parent_studio"] = scene["studio"]["parent_studio"][
-                    "name"
-                ].replace(" ", "")
+                scene_information["studio"] = studio_name.replace(" ", "")
             else:
-                scene_information["parent_studio"] = scene["studio"]["parent_studio"][
-                    "name"
-                ]
-            scene_information["studio_family"] = scene_information["parent_studio"]
+                scene_information["studio"] = studio_name
+            scene_information["studio_family"] = scene_information["studio"]
+            studio_hierarchy = [scene_information["studio"]]
+            # Grab Parent name
+            if scene["studio"].get("parent_studio"):
+                if SQUEEZE_STUDIO_NAMES:
+                    scene_information["parent_studio"] = scene["studio"][
+                        "parent_studio"
+                    ]["name"].replace(" ", "")
+                else:
+                    scene_information["parent_studio"] = scene["studio"][
+                        "parent_studio"
+                    ]["name"]
+                scene_information["studio_family"] = scene_information["parent_studio"]
 
-            studio_p = scene["studio"]
-            while studio_p.get("parent_studio"):
-                studio_p = graphql_getStudio(studio_p["parent_studio"]["id"])
-                if studio_p:
-                    if SQUEEZE_STUDIO_NAMES:
-                        studio_hierarchy.append(studio_p["name"].replace(" ", ""))
-                    else:
-                        studio_hierarchy.append(studio_p["name"])
-            studio_hierarchy.reverse()
-        scene_information["studio_hierarchy"] = studio_hierarchy
+                studio_p = scene["studio"]
+                while studio_p.get("parent_studio"):
+                    studio_p = stash.find_studio(studio_p["parent_studio"]["id"])
+                    if studio_p:
+                        if SQUEEZE_STUDIO_NAMES:
+                            studio_hierarchy.append(studio_p["name"].replace(" ", ""))
+                        else:
+                            studio_hierarchy.append(studio_p["name"])
+                studio_hierarchy.reverse()
+            scene_information["studio_hierarchy"] = studio_hierarchy
     # Grab Tags
     if scene.get("tags"):
         tag_list = []
@@ -777,14 +789,29 @@ def connect_db(path: str):
 
 
 def checking_duplicate_db(scene_info: dict):
-    scenes = graphql_findScenebyPath(scene_info["final_path"], "EQUALS")
-    if scenes["count"] > 0:
+    # result type of find_scenes with get_count: (<number>, <list>); <number> is the count of scenes
+    scenes = stash.find_scenes(
+        f={"path": {"modifier": "EQUALS", "value": scene_info["final_path"]}},
+        filter={"direction": "ASC", "page": 1, "per_page": 40, "sort": "updated_at"},
+        get_count=True,
+    )
+    log.debug("final_path scenes: {}".format(scenes))
+    log.debug("final_path scenes.count: {}".format(scenes[0]))
+
+    if scenes[0] > 0:
         log.error("Duplicate path detected")
         for dupl_row in scenes["scenes"]:
             log.warning(f"Identical path: [{dupl_row['id']}]")
         return 1
-    scenes = graphql_findScenebyPath(scene_info["new_filename"], "EQUALS")
-    if scenes["count"] > 0:
+    scenes = stash.find_scenes(
+        f={"path": {"modifier": "EQUALS", "value": scene_info["new_filename"]}},
+        filter={"direction": "ASC", "page": 1, "per_page": 40, "sort": "updated_at"},
+        get_count=True,
+    )
+    log.debug("new_filename scenes: {}".format(scenes))
+    log.debug("new_filename scenes.count: {}".format(scenes[0]))
+
+    if scenes[0] > 0:
         for dupl_row in scenes["scenes"]:
             if dupl_row["id"] != scene_info["scene_id"]:
                 log.warning(f"Duplicate filename: [{dupl_row['id']}]")
@@ -892,7 +919,7 @@ def file_rename(current_path: str, new_path: str, scene_info: dict):
     try:
         shutil.move(current_path, new_path)
     except PermissionError as err:
-        if "[WinError 32]" in str(err) and MODULE_PSUTIL:
+        if "[WinError 32]" in str(err) and IS_PSUTIL_AVAILABLE:
             log.warning(
                 "A process is using this file (Probably FFMPEG), trying to find it ..."
             )
@@ -980,7 +1007,7 @@ def renamer(scene_id, db_conn=None):
         stash_scene = scene_id
         scene_id = stash_scene["id"]
     elif type(scene_id) is int:
-        stash_scene = graphql_getScene(scene_id)
+        stash_scene = stash.find_scene(scene_id)
 
     if (
         config.only_organized
@@ -1241,14 +1268,74 @@ else:
     FRAGMENT_HOOK_TYPE = FRAGMENT["args"]["hookContext"]["type"]
     FRAGMENT_SCENE_ID = FRAGMENT["args"]["hookContext"]["id"]
 
+
+def callGraphQL(query, variables=None):
+    # Session cookie for authentication
+    graphql_port = str(FRAGMENT_SERVER["Port"])
+    graphql_scheme = FRAGMENT_SERVER["Scheme"]
+    graphql_cookies = {"session": FRAGMENT_SERVER["SessionCookie"]["Value"]}
+    graphql_headers = {
+        "Accept-Encoding": "gzip, deflate, br",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Connection": "keep-alive",
+        "DNT": "1",
+    }
+    graphql_domain = FRAGMENT_SERVER["Host"]
+    if graphql_domain == "0.0.0.0":
+        graphql_domain = "localhost"
+    # Stash GraphQL endpoint
+    graphql_url = f"{graphql_scheme}://{graphql_domain}:{graphql_port}/graphql"
+
+    json = {"query": query}
+    if variables is not None:
+        json["variables"] = variables
+    try:
+        response = requests.post(
+            graphql_url,
+            json=json,
+            headers=graphql_headers,
+            cookies=graphql_cookies,
+            timeout=20,
+        )
+    except Exception as e:
+        exit_plugin(err=f"[FATAL] Error with the graphql request {e}")
+    if response.status_code == 200:
+        result = response.json()
+        if result.get("error"):
+            for error in result["error"]["errors"]:
+                raise Exception(f"GraphQL error: {error}")
+            return None
+        if result.get("data"):
+            return result.get("data")
+    elif response.status_code == 401:
+        exit_plugin(err="HTTP Error 401, Unauthorised.")
+    else:
+        raise ConnectionError(
+            f"GraphQL query failed: {response.status_code} - {response.content}"
+        )
+
+
+def graphql_getBuild():
+    query = """
+        {
+            systemStatus {
+                databaseSchema
+            }
+        }
+    """
+    result = callGraphQL(query)
+    return result["systemStatus"]["databaseSchema"]
+
+
 LOGFILE = config.log_file
 
 # Gallery.Update.Post
 # if FRAGMENT_HOOK_TYPE == "Scene.Update.Post":
 
-
-STASH_CONFIG = graphql_getConfiguration()
+STASH_CONFIG = stash.get_configuration()
 STASH_DATABASE = STASH_CONFIG["general"]["databasePath"]
+DB_VERSION = graphql_getBuild()
 
 # READING CONFIG
 
@@ -1303,46 +1390,9 @@ PATH_KEEP_ALRPERF = config.path_keep_alrperf
 PATH_NON_ORGANIZED = config.p_non_organized
 PATH_ONEPERFORMER = config.path_one_performer
 
-DB_VERSION = graphql_getBuild()
-if DB_VERSION >= DB_VERSION_FILE_REFACTOR:
-    FILE_QUERY = """
-            files {
-                path
-                video_codec
-                audio_codec
-                width
-                height
-                frame_rate
-                duration
-                bit_rate
-                phash: fingerprint(type: "phash")
-                oshash: fingerprint(type: "oshash")
-                checksum: fingerprint(type: "checksum")
-                fingerprints {
-                    type
-                    value
-                }
-            }
-    """
-else:
-    FILE_QUERY = """
-            path
-            file {
-                video_codec
-                audio_codec
-                width
-                height
-                framerate
-                bitrate
-                duration
-            }
-    """
-if DB_VERSION >= DB_VERSION_SCENE_STUDIO_CODE:
-    FILE_QUERY = f"        code{FILE_QUERY}"
-
 if PLUGIN_ARGS:
     if "bulk" in PLUGIN_ARGS:
-        scenes = graphql_findScene(config.batch_number_scene, "ASC")
+        scenes = stash.find_scene(config.batch_number_scene, "ASC")
         log.debug(f"Count scenes: {len(scenes['scenes'])}")
         progress = 0
         progress_step = 1 / len(scenes["scenes"])
