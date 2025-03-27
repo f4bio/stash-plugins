@@ -11,7 +11,7 @@ from datetime import datetime
 import stashapi.log as log
 from stashapi.stashapp import StashInterface
 
-import renamerOnUpdate_config as defaultConfig
+import renamerOnUpdateDevelop_config as defaultConfig
 from graphql_custom import graphql_getBuild
 from helpers import is_module_available, check_long_path, find_diff_text
 
@@ -34,7 +34,7 @@ DRY_RUN_FILE = None
 
 if config.log_file:
     DRY_RUN_FILE = os.path.join(
-        os.path.dirname(config.log_file), "renamerOnUpdate_dryrun.txt"
+        os.path.dirname(config.log_file), "renamerOnUpdateDevelop_dryrun.txt"
     )
 
 if DRY_RUN:

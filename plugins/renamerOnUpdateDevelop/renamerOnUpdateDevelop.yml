@@ -4,7 +4,7 @@ url: https://github.com/f4bio/stash-plugins
 version: 2.6.0
 exec:
   - python
-  - "{pluginDir}/renamerOnUpdate.py"
+  - "{pluginDir}/renamerOnUpdateDevelop.py"
 interface: raw
 hooks:
   - name: hook_rename
