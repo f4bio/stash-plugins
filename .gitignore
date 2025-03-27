@@ -291,3 +291,4 @@ fabric.properties
 # End of https://mrkandreev.name/snippets/gitignore-generator/#Linux,macOS,Python,Windows,Intellij,VisualStudioCode
 
 /_site
+/.idea

@@ -38,8 +38,10 @@ services:
       - stash-blobs:/blobs
       ## Where to store generated content (screenshots,previews,transcodes,sprites)
       - stash-generated:/generated
-      ## Mount plugins 
+      ## Mount plugins
+      - ./stashdb.sqlite:/root/.stash/stash-go.sqlite
       - ./plugins/renamerOnUpdate:/root/.stash/plugins/community/renamerOnUpdate
+      - ./plugins/renamerOnUpdateDevelop:/root/.stash/plugins/community/renamerOnUpdateDevelop
       # - ...
 
 volumes:

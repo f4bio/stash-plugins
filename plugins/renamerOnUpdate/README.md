@@ -1,8 +1,8 @@
-# *renamerOnUpdate*
+# renamerOnUpdate
 
 Using metadata from your Stash to rename/move your file.
 
-## Table of Contents  
+## Table of Contents
 
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
@@ -139,7 +139,7 @@ tag_templates  = {
 ```
 
 | tag         | new path                                                         |
-| ----------- | ---------------------------------------------------------------- |
+|-------------|------------------------------------------------------------------|
 | rename_tag  | `C:\Temp\2008 Big Buck Bunny - Blender Institute 1080p H264.mp4` |
 | rename_tag2 | `C:\Temp\Big Buck Bunny.mp4`                                     |
 
@@ -153,7 +153,7 @@ studio_templates  = {
 ```
 
 | studio            | new path                                                      |
-| ----------------- | ------------------------------------------------------------- |
+|-------------------|---------------------------------------------------------------|
 | Blender Institute | `C:\Temp\2008-05-20 - Big Buck Bunny [Blender Institute].mp4` |
 | Pixar             | `C:\Temp\Big Buck Bunny [Pixar].mp4`                          |
 
@@ -174,7 +174,7 @@ Change your path (**C:\Temp**\\QmlnQnVja0J1bm55.mp4)
 
 ```py
 p_tag_templates  = {
- "rename_tag": r"D:\Video\",
+ "rename_tag": r"D:\Video\\",
  "rename_tag2": r"E:\Video\$year"
 }
 ```
@@ -188,8 +188,8 @@ p_tag_templates  = {
 
 ```py
 p_studio_templates  = {
- "Blender Institute": r"D:\Video\Blender\",
- "Pixar": r"E:\Video\$studio\"
+ "Blender Institute": r"D:\Video\Blender\\",
+ "Pixar": r"E:\Video\$studio\\"
 }
 ```
 
@@ -202,8 +202,8 @@ p_studio_templates  = {
 
 ```py
 p_path_templates = {
- r"C:\Temp": r"D:\Video\",
- r"C:\Video": r"E:\Video\Win\"
+ r"C:\Temp": r"D:\Video\\",
+ r"C:\Video": r"E:\Video\Win\\"
 }
 ```
 
@@ -216,7 +216,7 @@ p_path_templates = {
 
 ```py
 p_use_default_template  =  True
-p_default_template  =  r"D:\Video\"
+p_default_template  =  r"D:\Video\\"
 ```
 
 The file is moved to: `D:\Video\QmlnQnVja0J1bm55.mp4`
