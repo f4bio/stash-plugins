@@ -292,3 +292,4 @@ fabric.properties
 
 /_site
 /.idea
+/stashdb.sqlite
