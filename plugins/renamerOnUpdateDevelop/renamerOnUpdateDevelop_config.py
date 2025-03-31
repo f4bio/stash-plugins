@@ -266,6 +266,9 @@ dry_run_append = True
 process_getall = False
 # If the file is used by a process, the plugin will kill it. IT CAN MAKE STASH CRASH TOO.
 process_kill_attach = False
+# copy file (via hardlink) instead of moving it
+copy_file = True
+
 # =========================
 
 # = Unidecode module (https://pypi.org/project/Unidecode/) =

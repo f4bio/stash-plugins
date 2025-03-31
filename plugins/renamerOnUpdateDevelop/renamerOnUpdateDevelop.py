@@ -11,12 +11,15 @@ from datetime import datetime
 import stashapi.log as log
 from stashapi.stashapp import StashInterface
 
+import helpers
 import renamerOnUpdateDevelop_config as defaultConfig
 from graphql_custom import graphql_getBuild
-from helpers import is_module_available, check_long_path, find_diff_text
+from plugins.renamerOnUpdateDevelop.config_operations import ConfigOperations
+from plugins.renamerOnUpdateDevelop.file_operations import FileOperations
+from plugins.renamerOnUpdateDevelop.string_operations import StringOperations
 
-IS_UNIDECODE_AVAILABLE: bool = is_module_available("unidecode")
-IS_CONFIG_AVAILABLE: bool = is_module_available("config")
+IS_UNIDECODE_AVAILABLE: bool = helpers.is_module_available("unidecode")
+IS_CONFIG_AVAILABLE: bool = helpers.is_module_available("config")
 
 if IS_UNIDECODE_AVAILABLE:
     import unidecode  # pip install unidecode
@@ -29,7 +32,6 @@ else:
 DB_VERSION_FILE_REFACTOR = 32
 DB_VERSION_SCENE_STUDIO_CODE = 38
 
-DRY_RUN = config.dry_run
 DRY_RUN_FILE = None
 
 if config.log_file:
@@ -37,7 +39,7 @@ if config.log_file:
         os.path.dirname(config.log_file), "renamerOnUpdateDevelop_dryrun.txt"
     )
 
-if DRY_RUN:
+if config.dry_run:
     if DRY_RUN_FILE and not config.dry_run_append:
         if os.path.exists(DRY_RUN_FILE):
             os.remove(DRY_RUN_FILE)
@@ -59,57 +61,9 @@ stash = StashInterface(
     {"scheme": stash_scheme, "host": stash_domain, "port": stash_port, "logger": log}
 )
 
-def config_edit(name: str, state: bool):
-    found = 0
-    try:
-        with open(config.__file__, "r", encoding="utf8") as file:
-            config_lines = file.readlines()
-        with open(config.__file__, "w", encoding="utf8") as file_w:
-            for line in config_lines:
-                if len(line.split("=")) > 1:
-                    if name == line.split("=")[0].strip():
-                        file_w.write(f"{name} = {state}\n")
-                        found += 1
-                        continue
-                file_w.write(line)
-    except PermissionError as _err:
-        log.error(f"You don't have the permission to edit config.py ({_err})")
-    return found
-
-def get_template_filename(_scene: dict):
-    template = None
-    # Change by Studio
-    if _scene.get("studio") and config.studio_templates:
-        template_found = False
-        current_studio = _scene.get("studio")
-        if config.studio_templates.get(current_studio["name"]):
-            template = config.studio_templates[current_studio["name"]]
-            template_found = True
-        # by first Parent found
-        while current_studio.get("parent_studio") and not template_found:
-            if config.studio_templates.get(
-                current_studio.get("parent_studio").get("name")
-            ):
-                template = config.studio_templates[
-                    current_studio["parent_studio"]["name"]
-                ]
-                template_found = True
-            current_studio = stash.find_studio(
-                current_studio.get("parent_studio")["id"]
-            )
-            log.debug(
-                "get_template_filename(current_studio): {}".format(current_studio)
-            )
-
-    # Change by Tag
-    tags = [x["name"] for x in _scene["tags"]]
-    if _scene.get("tags") and config.tag_templates:
-        for match, job in config.tag_templates.items():
-            if match in tags:
-                template = job
-                break
-    return template
-
+configOperations = ConfigOperations(log, config, stash)
+stringOperations = StringOperations(log, config, stash)
+fileOperations = FileOperations(log, config, stash)
 
 def get_template_path(_scene: dict):
     template = {"destination": "", "option": [], "opt_details": {}}
@@ -562,17 +516,10 @@ def remove_consecutive_nonword(text: str):
 
 
 def field_replacer(text: str, scene_information: dict):
-
-    log.debug("field_replacer(text): {}".format(text))
-    log.debug("field_replacer(scene_information): {}".format(scene_information))
-
     field_found = re.findall(r"\$\w+", text)
     result = text
     title = None
-
-    log.debug("field_replacer(field_found): {}".format(field_found))
-
-    if field_found:
+    if len(field_found) > 1:
         field_found.sort(key=len, reverse=True)
     for i in range(0, len(field_found)):
         f = field_found[i].replace("$", "").strip("_")
@@ -617,13 +564,8 @@ def field_replacer(text: str, scene_information: dict):
     return result, title
 
 
-def makeFilename(scene_information: dict, query: str) -> str:
+def make_filename(scene_information: dict, query: str) -> str:
     new_filename = str(query)
-
-    # log.debug("makeFilename(query): {}".format(query))
-    # log.debug("makeFilename(new_filename): {}".format(new_filename))
-    # log.debug("makeFilename(scene_information): {}".format(scene_information))
-
     r, t = field_replacer(new_filename, scene_information)
     if config.replace_words:
         r = replace_text(r)
@@ -637,7 +579,7 @@ def makeFilename(scene_information: dict, query: str) -> str:
     return r
 
 
-def makePath(scene_information: dict, query: str) -> str:
+def make_path(scene_information: dict, query: str) -> str:
     new_filename = str(query)
     new_filename = new_filename.replace("$performer", "$performer_path")
     r, t = field_replacer(new_filename, scene_information)
@@ -648,86 +590,18 @@ def makePath(scene_information: dict, query: str) -> str:
         r = r.replace("$title", t)
     return r
 
-
-def capitalize_words(s: str) -> str:
-    """
-    Converts a filename to title case. Capitalizes all words except for certain
-    conjunctions, prepositions, and articles, unless they are the first or
-    last word of a segment of the filename. Recognizes standard apostrophes, right
-    single quotation marks (U+2019), and left single quotation marks (U+2018) within words.
-
-    Ignores all caps words and abbreviations, e.g., MILF, BBW, VR, PAWGs.
-    Ignores words with mixed case, e.g., LaSirena69, VRCosplayX, xHamster.
-    Ignores resolutions, e.g., 1080p, 4k.
-
-    Args:
-        s (str): The string to capitalize.
-
-    Returns:
-        str: The capitalized string.
-
-    Raises:
-        ValueError: If the input is not a string.
-
-    About the regex:
-        The first \b marks the starting word boundary.
-        [A-Z]? Allows for an optional initial uppercase letter.
-        [a-z\'\u2019\u2018]+ matches one or more lowercase letters, apostrophes, right single quotation marks, or left single quotation marks.
-            If a word contains multiple uppercase letters, it does not match.
-        The final \b marks the ending word boundary, ensuring the expression matches whole words.
-    """
-    if not isinstance(s, str):
-        raise ValueError("Input must be a string.")
-
-    # Function to capitalize words based on their position and value.
-    def process_word(match):
-        word = match.group(0)
-        preceding_char, following_char = None, None
-
-        # List of words to avoid capitalizing if found between other words.
-        exceptions = {"and", "of", "the"}
-
-        # Find the nearest non-space character before the current word
-        if match.start() > 0:
-            for i in range(match.start() - 1, -1, -1):
-                if not match.string[i].isspace():
-                    preceding_char = match.string[i]
-                    break
-
-        # Find the nearest non-space character after the current word
-        if match.end() < len(s):
-            for i in range(match.end(), len(s)):
-                if not match.string[i].isspace():
-                    following_char = match.string[i]
-                    break
-
-        # Determine capitalization based on the position and the exception rules
-        if (
-            match.start() == 0
-            or match.end() == len(s)
-            or word.lower() not in exceptions
-            or (preceding_char and not preceding_char.isalnum())
-            or (following_char and not following_char.isalnum())
-        ):
-            return word.capitalize()
-        else:
-            return word.lower()
-
-    # Apply the regex pattern and the process_word function.
-    return re.sub(r"\b[A-Z]?[a-z\'\u2019\u2018]+\b", process_word, s)
-
-
 def create_new_filename(scene_info: dict, template: str):
-    # log.debug("create_new_filename(scene_info): {}".format(scene_info))
-    # log.debug("create_new_filename(template): {}".format(template))
-
-    new_filename = template.format(**scene_info)
+    new_filename = (
+      make_filename(scene_info, template)
+      + DUPLICATE_SUFFIX[scene_info["file_index"]]
+      + scene_info["file_extension"]
+    )
     log.debug("create_new_filename(new): {}".format(new_filename))
 
     if FILENAME_LOWER:
         new_filename = new_filename.lower()
     if FILENAME_TITLECASE:
-        new_filename = capitalize_words(new_filename)
+      new_filename = stringOperations.capitalize_words(new_filename)
     # Remove illegal character for Windows
     new_filename = re.sub('[/:"*?<>|]+', "", new_filename)
 
@@ -767,7 +641,7 @@ def create_new_path(scene_info: dict, template: dict):
                 path_list.append(re.sub('[/:"*?<>|]+', "", p).strip())
         else:
             path_list.append(
-                re.sub('[/:"*?<>|]+', "", makePath(scene_info, part)).strip()
+              re.sub('[/:"*?<>|]+', "", make_path(scene_info, part)).strip()
             )
     # Remove blank, empty string
     path_split = [x for x in path_list if x]
@@ -826,7 +700,7 @@ def checking_duplicate_db(scene_info: dict):
     if _scenes[0] > 0:
         log.error("Duplicate path detected")
         for dupl_row in _scenes[1]:
-            log.warning(f"Identical path: [{dupl_row['id']}]")
+          log.warning(f"Identical path: [{dupl_row}]")
         return 1  # TODO: is this needed?
 
     # result type of find_scenes with get_count: (<number>, <list>); <number> is the count of scenes
@@ -838,7 +712,7 @@ def checking_duplicate_db(scene_info: dict):
     if _scenes[0] > 0:
         for dupl_row in _scenes[1]:
             if dupl_row["id"] != scene_info["scene_id"]:
-                log.warning(f"Duplicate filename: [{dupl_row['id']}]")
+              log.warning(f"Duplicate filename: [{dupl_row}]")
 
 
 def db_rename(_stash_db: sqlite3.Connection, scene_info):
@@ -941,7 +815,7 @@ def file_rename(current_path: str, new_path: str, scene_info: dict):
         log.info(f"Creating folder because it don't exist ({new_dir})")
         os.makedirs(new_dir)
     try:
-        shutil.move(current_path, new_path)
+      move_file(current_path, new_path)
     except PermissionError as _error:
         log.error(f"Something prevents renaming the file. {_error}")
         return 1
@@ -955,12 +829,12 @@ def file_rename(current_path: str, new_path: str, scene_info: dict):
                         f"{scene_info['scene_id']}|{current_path}|{new_path}|{scene_info['oshash']}\n"
                     )
             except Exception as _error:
-                shutil.move(new_path, current_path)
+                move_file(new_path, current_path)
                 log.error(
                     f"Restoring the original path, error writing the logfile: {_error}"
                 )
                 return 1
-        if REMOVE_EMPTY_FOLDER:
+        if config.remove_emptyfolder:
             with os.scandir(current_dir) as it:
                 if not any(it):
                     log.info(f"Removing empty folder ({current_dir})")
@@ -975,6 +849,12 @@ def file_rename(current_path: str, new_path: str, scene_info: dict):
         log.error(f"[OS] Failed to rename the file ? {new_path}")
         return 1
 
+def move_file(current_location: str, new_location: str):
+  if config.copy_file:
+    # os.link(current_path, new_path)
+    shutil.copytree(current_location, new_location, copy_function=os.link)
+  else:
+    shutil.move(current_location, new_location)
 
 def associated_rename(scene_info: dict):
     if config.associated_extension:
@@ -983,7 +863,7 @@ def associated_rename(scene_info: dict):
             p_new = os.path.splitext(scene_info["final_path"])[0] + "." + ext
             if os.path.isfile(p):
                 try:
-                    shutil.move(p, p_new)
+                    move_file(p, p_new)
                 except Exception as _error:
                     log.error(
                         f"Something prevents renaming this file '{p}' - err: {_error}"
@@ -996,7 +876,7 @@ def associated_rename(scene_info: dict):
                         with open(LOGFILE, "a", encoding="utf-8") as f:
                             f.write(f"{scene_info['scene_id']}|{p}|{p_new}\n")
                     except Exception as _error:
-                        shutil.move(p_new, p)
+                        move_file(p_new, p)
                         log.error(
                             f"Restoring the original name, error writing the logfile: {_error}"
                         )
@@ -1007,18 +887,17 @@ def renamer(scene_id, db_conn=None):
     option_dryrun = False
     if type(scene_id) is dict:
         stash_scene = scene_id
-        scene_id = stash_scene["id"]
     elif type(scene_id) is int:
         stash_scene = stash.find_scene(scene_id)
 
-    log.debug("renamer(scene): {}".format(stash_scene))
+    log.debug("renamer(stash_scene_id): {}".format(stash_scene["id"]))
 
     if (
         config.only_organized
         and not stash_scene["organized"]
         and not PATH_NON_ORGANIZED
     ):
-        log.debug(f"[{scene_id}] Scene ignored (not organized)")
+        log.debug(f"[{stash_scene['id']}] Scene ignored (not organized)")
         return
 
     # connect to the db
@@ -1064,9 +943,10 @@ def renamer(scene_id, db_conn=None):
         if scene_file.get("frame_rate"):
             stash_scene["file"]["framerate"] = scene_file["frame_rate"]
 
+        # Prepare `template`
         # Tags > Studios > Default
         template = dict()
-        template["filename"] = get_template_filename(stash_scene)
+        template["filename"] = fileOperations.get_template_filename(stash_scene)
         template["path"] = get_template_path(stash_scene)
         if not template["path"].get("destination"):
             if config.p_use_default_template:
@@ -1080,7 +960,7 @@ def renamer(scene_id, db_conn=None):
                 template["path"] = None
         else:
             if template["path"].get("option"):
-                if "dry_run" in template["path"]["option"] and not DRY_RUN:
+                if "dry_run" in template["path"]["option"] and not config.dry_run:
                     log.info("Dry-Run on (activate by option)")
                     option_dryrun = True
         if not template["filename"] and config.use_default_template:
@@ -1088,15 +968,16 @@ def renamer(scene_id, db_conn=None):
             template["filename"] = config.default_template
 
         if not template["filename"] and not template["path"]:
-            log.warning(f"[{scene_id}] No template for this scene.")
+            log.warning(f"[{scene['id']}] No template for this scene.")
             return
 
-        # log.debug("Using this template: {}".format(filename_template))
-        scene_information = extract_info(stash_scene, template)
-        log.debug(f"[{scene_id}] Scene information: {scene_information}")
-        log.debug(f"[{scene_id}] Template: {template}")
+        log.debug(f"[{stash_scene['id']}] Template: {template}")
+        # `template` prepared
 
-        scene_information["scene_id"] = scene_id
+        # Prepare `scene_information`
+        scene_information = extract_info(stash_scene, template)
+
+        scene_information["scene_id"] = stash_scene['id']
         scene_information["file_index"] = i
 
         for removed_field in config.order_field:
@@ -1129,16 +1010,13 @@ def renamer(scene_id, db_conn=None):
             if IGNORE_PATH_LENGTH or len(scene_information["final_path"]) <= 240:
                 break
 
-        if not IGNORE_PATH_LENGTH and check_long_path(scene_information["final_path"]):
-            if (DRY_RUN or option_dryrun) and LOGFILE:
+        if not IGNORE_PATH_LENGTH and helpers.check_long_path(scene_information["final_path"]):
+            if (config.dry_run or option_dryrun) and LOGFILE:
                 with open(DRY_RUN_FILE, "a", encoding="utf-8") as f:
                     f.write(
                         f"[LENGTH LIMIT] {scene_information['scene_id']}|{scene_information['final_path']}\n"
                     )
             continue
-
-        # log.debug(f"Filename: {scene_information['current_filename']} -> {scene_information['new_filename']}")
-        # log.debug(f"Path: {scene_information['current_directory']} -> {scene_information['new_directory']}")
 
         if scene_information["final_path"] == scene_information["current_path"]:
             log.info(f"Everything is ok. ({scene_information['current_filename']})")
@@ -1152,7 +1030,7 @@ def renamer(scene_id, db_conn=None):
         if scene_information["current_filename"] != scene_information["new_filename"]:
             log.info("The filename will be changed")
             if ALT_DIFF_DISPLAY:
-                find_diff_text(
+              helpers.find_diff_text(
                     scene_information["current_filename"],
                     scene_information["new_filename"],
                 )
@@ -1160,7 +1038,7 @@ def renamer(scene_id, db_conn=None):
                 log.debug(f"[OLD filename] {scene_information['current_filename']}")
                 log.debug(f"[NEW filename] {scene_information['new_filename']}")
 
-        if (DRY_RUN or option_dryrun) and LOGFILE:
+        if (config.dry_run or option_dryrun) and LOGFILE:
             with open(DRY_RUN_FILE, "a", encoding="utf-8") as f:
                 f.write(
                     f"{scene_information['scene_id']}|{scene_information['current_path']}|{scene_information['final_path']}\n"
@@ -1223,10 +1101,6 @@ def renamer(scene_id, db_conn=None):
                             },
                         }
                     )
-                    # graphql_removeScenesTag(
-                    #     [scene_information["scene_id"]],
-                    #     template["path"]["opt_details"]["clean_tag"],
-                    # )
         except Exception as _error:
             log.error(f"Error during database operation ({_error})")
             if not db_conn:
@@ -1255,17 +1129,17 @@ if PLUGIN_ARGS:
     if "bulk" not in PLUGIN_ARGS:
         if "enable" in PLUGIN_ARGS:
             log.info("Enable hook")
-            success = config_edit("enable_hook", True)
+            success = configOperations.config_edit("enable_hook", True)
         elif "disable" in PLUGIN_ARGS:
             log.info("Disable hook")
-            success = config_edit("enable_hook", False)
+            success = configOperations.config_edit("enable_hook", False)
         elif "dryrun" in PLUGIN_ARGS:
             if config.dry_run:
                 log.info("Disable dryrun")
-                success = config_edit("dry_run", False)
+                success = configOperations.config_edit("dry_run", False)
             else:
                 log.info("Enable dryrun")
-                success = config_edit("dry_run", True)
+                success = configOperations.config_edit("dry_run", True)
         # if not success:
         #     log.error("Script failed to change the value")
         exit_plugin("script finished")
