@@ -135,6 +135,11 @@ field_whitespaceSeperator = ""
 # ex: "$studio": {"replace": "'","with": ""} My Dad's Hot Girlfriend --> My Dads Hot Girlfriend
 field_replacer = {}
 
+# Remove/Replace character from field case insensitive
+# "field": {"replace": "with"}
+# ex: "$title": {"old1":"new1","old2":"new2"} This example title contains old1 and old2 --> This example title contains new1 and new2
+field_multi_replacer = {}
+
 # Match and replace.
 # "match": ["replace with", "system"] the second element of the list determine the system used. If you don't put this element, the default is word
 # regex: match a regex, word: match a word, any: match a term
