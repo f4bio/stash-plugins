@@ -550,10 +550,8 @@ def field_replacer(text: str, scene_information: dict):
         replaced_word = scene_information.get(f)
         if not replaced_word:
             replaced_word = ""
-        if FIELD_REPLACER.get(f"${f}"):
-            replaced_word = replaced_word.replace(
-                FIELD_REPLACER[f"${f}"]["replace"], FIELD_REPLACER[f"${f}"]["with"]
-            )
+        for search_item,replace_item in FIELD_MULTI_REPLACER.get(f"${f}",{}).items():
+            replaced_word = re.sub(re.escape(search_item),replace_item,replaced_word,flags=re.IGNORECASE)
         if f == "title":
             title = replaced_word.strip()
             continue
@@ -1163,7 +1161,14 @@ DB_VERSION = graphql_getBuild(FRAGMENT_SERVER)
 ASSOCIATED_EXT = config.associated_extension
 
 FIELD_WHITESPACE_SEP = config.field_whitespaceSeperator
-FIELD_REPLACER = config.field_replacer
+
+# This provides support for the "field_replacer" where its only possible to make one replacement per field
+# it merges the actions for the fields from both replacers together, but can be removed if 'field_replacer' no longer needs to be supported
+merged_field_replacer_actions: dict[str, dict[str, str]] = config.field_multi_replacer
+for field,action in config.field_replacer.items():
+    merged_field_replacer_actions[field] = ({action['replace']:action['with']} | merged_field_replacer_actions.get("field",{}))
+    
+FIELD_MULTI_REPLACER = merged_field_replacer_actions
 
 FILENAME_LOWER = config.lowercase_Filename
 FILENAME_TITLECASE = config.titlecase_Filename
