@@ -390,6 +390,145 @@ def check_longpath(path: str):
         return 1
 
 
+def matches_pattern(text: str, pattern_config: dict) -> bool:
+    """
+    Check if text matches a pattern configuration.
+    
+    Args:
+        text: The text to match against
+        pattern_config: Dictionary with 'type' and 'pattern' keys
+        
+    Returns:
+        bool: True if text matches the pattern
+    """
+    if not pattern_config or not text:
+        return False
+        
+    pattern_type = pattern_config.get("type", "exact")
+    pattern = pattern_config.get("pattern", "")
+    
+    if not pattern:
+        return False
+        
+    try:
+        if pattern_type == "regex":
+            return bool(re.search(pattern, text))
+        else:  # exact match
+            return text == pattern
+    except re.error as e:
+        log.LogError(f"Invalid regex pattern '{pattern}': {e}")
+        return False
+
+
+def is_path_excluded(file_path: str) -> bool:
+    """
+    Check if a file path should be excluded based on path patterns.
+    
+    Args:
+        file_path: The file path to check
+        
+    Returns:
+        bool: True if the path should be excluded
+    """
+    if not EXCLUDE_ENABLED or not EXCLUDE_PATH_PATTERNS:
+        return False
+        
+    for pattern_name, pattern_config in EXCLUDE_PATH_PATTERNS.items():
+        if matches_pattern(file_path, pattern_config):
+            log.LogDebug(f"Path excluded by pattern '{pattern_name}': {file_path}")
+            return True
+            
+    return False
+
+
+def is_studio_excluded(studio: dict) -> bool:
+    """
+    Check if a studio should be excluded based on studio patterns.
+    Includes checking parent studios.
+    
+    Args:
+        studio: The studio dictionary from the scene
+        
+    Returns:
+        bool: True if the studio should be excluded
+    """
+    if not EXCLUDE_ENABLED or not EXCLUDE_STUDIO_PATTERNS or not studio:
+        return False
+        
+    # Check current studio
+    studio_name = studio.get("name", "")
+    for pattern_name, pattern_config in EXCLUDE_STUDIO_PATTERNS.items():
+        if matches_pattern(studio_name, pattern_config):
+            log.LogDebug(f"Studio excluded by pattern '{pattern_name}': {studio_name}")
+            return True
+            
+    # Check parent studio
+    parent_studio = studio.get("parent_studio")
+    if parent_studio:
+        parent_name = parent_studio.get("name", "")
+        for pattern_name, pattern_config in EXCLUDE_STUDIO_PATTERNS.items():
+            if matches_pattern(parent_name, pattern_config):
+                log.LogDebug(f"Parent studio excluded by pattern '{pattern_name}': {parent_name}")
+                return True
+                
+    return False
+
+
+def is_tags_excluded(tags: list) -> bool:
+    """
+    Check if any tags should cause exclusion based on tag patterns.
+    
+    Args:
+        tags: List of tag dictionaries from the scene
+        
+    Returns:
+        bool: True if any tag matches exclusion patterns
+    """
+    if not EXCLUDE_ENABLED or not EXCLUDE_TAG_PATTERNS or not tags:
+        return False
+        
+    for tag in tags:
+        tag_name = tag.get("name", "")
+        for pattern_name, pattern_config in EXCLUDE_TAG_PATTERNS.items():
+            if matches_pattern(tag_name, pattern_config):
+                log.LogDebug(f"Tag excluded by pattern '{pattern_name}': {tag_name}")
+                return True
+                
+    return False
+
+
+def is_scene_excluded(scene: dict) -> bool:
+    """
+    Main exclusion check coordinator. Checks if a scene should be excluded
+    based on any of the configured exclusion patterns.
+    
+    Args:
+        scene: The scene dictionary
+        
+    Returns:
+        bool: True if the scene should be excluded
+    """
+    if not EXCLUDE_ENABLED:
+        return False
+        
+    # Check path exclusion
+    file_path = scene.get("path", "")
+    if is_path_excluded(file_path):
+        return True
+        
+    # Check studio exclusion
+    studio = scene.get("studio")
+    if is_studio_excluded(studio):
+        return True
+        
+    # Check tag exclusion
+    tags = scene.get("tags", [])
+    if is_tags_excluded(tags):
+        return True
+        
+    return False
+
+
 def get_template_filename(scene: dict):
     template = None
     # Change by Studio
@@ -1231,6 +1370,11 @@ def renamer(scene_id, db_conn=None):
         log.LogDebug(f"[{scene_id}] Scene ignored (not organized)")
         return
 
+    # Check if scene should be excluded
+    if is_scene_excluded(stash_scene):
+        log.LogDebug(f"[{scene_id}] Scene excluded by exclude patterns")
+        return
+
     # refractor file support
     fingerprint = []
     if stash_scene.get("path"):
@@ -1517,6 +1661,12 @@ TAGS_WHITELIST = config.tags_whitelist
 TAGS_BLACKLIST = config.tags_blacklist
 
 IGNORE_PATH_LENGTH = config.ignore_path_length
+
+# Exclude configuration
+EXCLUDE_ENABLED = config.exclude_enabled
+EXCLUDE_TAG_PATTERNS = config.exclude_tag_patterns
+EXCLUDE_STUDIO_PATTERNS = config.exclude_studio_patterns
+EXCLUDE_PATH_PATTERNS = config.exclude_path_patterns
 
 PREVENT_CONSECUTIVE = config.prevent_consecutive
 REMOVE_EMPTY_FOLDER = config.remove_emptyfolder
