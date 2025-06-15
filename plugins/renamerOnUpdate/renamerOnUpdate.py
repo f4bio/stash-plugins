@@ -435,7 +435,7 @@ def is_path_excluded(file_path: str) -> bool:
         
     for pattern_name, pattern_config in EXCLUDE_PATH_PATTERNS.items():
         if matches_pattern(file_path, pattern_config):
-            log.LogDebug(f"Path excluded by pattern '{pattern_name}': {file_path}")
+            log.LogInfo(f"Path excluded by pattern '{pattern_name}': {file_path}")
             return True
             
     return False
@@ -459,7 +459,7 @@ def is_studio_excluded(studio: dict) -> bool:
     studio_name = studio.get("name", "")
     for pattern_name, pattern_config in EXCLUDE_STUDIO_PATTERNS.items():
         if matches_pattern(studio_name, pattern_config):
-            log.LogDebug(f"Studio excluded by pattern '{pattern_name}': {studio_name}")
+            log.LogInfo(f"Studio excluded by pattern '{pattern_name}': {studio_name}")
             return True
             
     # Check parent studio
@@ -468,7 +468,7 @@ def is_studio_excluded(studio: dict) -> bool:
         parent_name = parent_studio.get("name", "")
         for pattern_name, pattern_config in EXCLUDE_STUDIO_PATTERNS.items():
             if matches_pattern(parent_name, pattern_config):
-                log.LogDebug(f"Parent studio excluded by pattern '{pattern_name}': {parent_name}")
+                log.LogInfo(f"Parent studio excluded by pattern '{pattern_name}': {parent_name}")
                 return True
                 
     return False
@@ -491,7 +491,7 @@ def is_tags_excluded(tags: list) -> bool:
         tag_name = tag.get("name", "")
         for pattern_name, pattern_config in EXCLUDE_TAG_PATTERNS.items():
             if matches_pattern(tag_name, pattern_config):
-                log.LogDebug(f"Tag excluded by pattern '{pattern_name}': {tag_name}")
+                log.LogInfo(f"Tag excluded by pattern '{pattern_name}': {tag_name}")
                 return True
                 
     return False
@@ -1370,11 +1370,6 @@ def renamer(scene_id, db_conn=None):
         log.LogDebug(f"[{scene_id}] Scene ignored (not organized)")
         return
 
-    # Check if scene should be excluded
-    if is_scene_excluded(stash_scene):
-        log.LogDebug(f"[{scene_id}] Scene excluded by exclude patterns")
-        return
-
     # refractor file support
     fingerprint = []
     if stash_scene.get("path"):
@@ -1405,6 +1400,12 @@ def renamer(scene_id, db_conn=None):
                 stash_scene["checksum"] = f["checksum"]
         stash_scene["path"] = scene_file["path"]
         stash_scene["file"] = scene_file
+        
+        # Check if scene should be excluded (now that path is properly set)
+        if is_scene_excluded(stash_scene):
+            log.LogDebug(f"[{scene_id}] Scene excluded by exclude patterns")
+            return
+        
         if scene_file.get("bit_rate"):
             stash_scene["file"]["bit_rate"] = scene_file["bit_rate"]
         if scene_file.get("frame_rate"):
@@ -1476,11 +1477,13 @@ def renamer(scene_id, db_conn=None):
                 break
 
         if check_longpath(scene_information["final_path"]):
-            if (DRY_RUN or option_dryrun) and LOGFILE:
-                with open(DRY_RUN_FILE, "a", encoding="utf-8") as f:
-                    f.write(
-                        f"[LENGTH LIMIT] {scene_information['scene_id']}|{scene_information['final_path']}\n"
-                    )
+            if (DRY_RUN or option_dryrun):
+                log.LogInfo(f"[DRY-RUN] Would skip due to length limit: {scene_information['final_path']}")
+                if DRY_RUN_FILE:
+                    with open(DRY_RUN_FILE, "a", encoding="utf-8") as f:
+                        f.write(
+                            f"[LENGTH LIMIT] {scene_information['scene_id']}|{scene_information['final_path']}\n"
+                        )
             continue
 
         # log.LogDebug(f"Filename: {scene_information['current_filename']} -> {scene_information['new_filename']}")
@@ -1506,11 +1509,13 @@ def renamer(scene_id, db_conn=None):
                 log.LogDebug(f"[OLD filename] {scene_information['current_filename']}")
                 log.LogDebug(f"[NEW filename] {scene_information['new_filename']}")
 
-        if (DRY_RUN or option_dryrun) and LOGFILE:
-            with open(DRY_RUN_FILE, "a", encoding="utf-8") as f:
-                f.write(
-                    f"{scene_information['scene_id']}|{scene_information['current_path']}|{scene_information['final_path']}\n"
-                )
+        if (DRY_RUN or option_dryrun):
+            log.LogInfo(f"[DRY-RUN] Would rename: {scene_information['current_path']} -> {scene_information['final_path']}")
+            if DRY_RUN_FILE:
+                with open(DRY_RUN_FILE, "a", encoding="utf-8") as f:
+                    f.write(
+                        f"{scene_information['scene_id']}|{scene_information['current_path']}|{scene_information['final_path']}\n"
+                    )
             continue
         # check if there is already a file where the new path is
         err = checking_duplicate_db(scene_information)
@@ -1580,6 +1585,7 @@ def renamer(scene_id, db_conn=None):
     if not db_conn and stash_db:
         stash_db.close()
         log.LogInfo("[SQLITE] Database updated and closed!")
+
 
 
 def exit_plugin(msg=None, err=None):
@@ -1667,6 +1673,7 @@ EXCLUDE_ENABLED = config.exclude_enabled
 EXCLUDE_TAG_PATTERNS = config.exclude_tag_patterns
 EXCLUDE_STUDIO_PATTERNS = config.exclude_studio_patterns
 EXCLUDE_PATH_PATTERNS = config.exclude_path_patterns
+
 
 PREVENT_CONSECUTIVE = config.prevent_consecutive
 REMOVE_EMPTY_FOLDER = config.remove_emptyfolder
