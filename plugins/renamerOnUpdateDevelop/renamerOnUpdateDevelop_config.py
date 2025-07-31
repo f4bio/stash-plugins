@@ -51,7 +51,7 @@
 ####################################################################
 #           TEMPLATE FILENAME (Rename your files)
 
-# Priority : Tags > Studios > Default
+# Priority: Tags > Studios > Default
 
 # Templates to use for given tags
 # Add or remove as needed or leave it empty/comment out

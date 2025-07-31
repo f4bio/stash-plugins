@@ -8,7 +8,7 @@ services:
     ## the container's port must be the same with the STASH_PORT in the environment section
     ports:
       - "9999:9999"
-    ## If you intend to use stash's DLNA functionality uncomment the below network mode and comment out the above ports section
+    ## If you intend to use stash's DLNA functionality, uncomment the below network mode and comment out the above ports section
     # network_mode: host
     logging:
       driver: "json-file"
@@ -25,7 +25,7 @@ services:
     volumes:
       - /etc/localtime:/etc/localtime:ro
       ## Adjust below paths (the left part) to your liking.
-      ## E.g. you can change ./config:/root/.stash to ./stash:/root/.stash
+      ## E.g., you can change ./config:/root/.stash to ./stash:/root/.stash
       ## Keep configs, scrapers, and plugins here.
       - stash-config:/root/.stash
       ## Point this at your collection.
@@ -36,7 +36,7 @@ services:
       - stash-cache:/cache
       ## Where to store binary blob data (scene covers, images)
       - stash-blobs:/blobs
-      ## Where to store generated content (screenshots,previews,transcodes,sprites)
+      ## Where to store generated content (screenshots, previews, transcodes, sprites)
       - stash-generated:/generated
       ## Mount plugins
       - ./stashdb.sqlite:/root/.stash/stash-go.sqlite

@@ -44,6 +44,7 @@ class StringOperations:
         f"The path is too long ({len(path)} > 240). You can look at 'order_field'/'ignore_path_length' in config."
       )
       return 1
+    return None
 
   def capitalize_words(self, s: str) -> str:
     """
