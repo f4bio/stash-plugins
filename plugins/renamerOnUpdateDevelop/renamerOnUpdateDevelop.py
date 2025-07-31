@@ -214,7 +214,7 @@ def extract_info(_scene: dict, template: dict):
   scene_bit_rate = str(round(int(_scene["file"]["bit_rate"]) / 1000000, 2))
 
   if _scene.get("stash_ids"):
-    # TODO: support other db then stashdb ?
+    # TODO: support other db then sqlite?
     scene_id = _scene["stash_ids"][0]["stash_id"]
     scene_info.id = _scene["stash_ids"][0]["stash_id"]
 
@@ -337,7 +337,7 @@ def extract_info(_scene: dict, template: dict):
     if perf_list:
       for p in perf_list:
         for perf in _scene["performers"]:
-          # TODO: support other db then stashdb ?
+          # TODO: support other db then sqlite?
           if "name" in perf:
             perf_name = perf["name"]
             if p == perf_name and perf.get("stash_ids"):
@@ -720,6 +720,7 @@ def checking_duplicate_db(scene_info: dict):
     for dupl_row in _scenes[1]:
       if dupl_row["id"] != scene_info["scene_id"]:
         log.warning(f"Duplicate filename: [{dupl_row}]")
+  return None
 
 
 def db_rename(_stash_db: sqlite3.Connection, scene_info):
