@@ -79,22 +79,22 @@ default_template = "$date $title"
 # trigger with a specific tag
 # "tagname": "path"
 # ex: "plugin_move": r"E:\Movies\R18\$studio_hierarchy"
-p_tag_templates = {}
+path_tag_templates = {}
 
-p_studio_templates = {}
+path_studio_templates = {}
 
 # match a path
 # "match path": "destination"
-# ex: r"E:\Film\R18\2. Test\A trier": r"E:\Film\R18\2. Test\A trier\$performer",
-p_path_templates = {}
+# ex: r"E:\Film\R18\2. Test\A trier": r" E:\Film\R18\2. Test\A trier\$performer",
+path_path_templates = {}
 
 # change to True to use the default template if no specific tag/studio is found
-p_use_default_template = False
+path_use_default_template = False
 # default template, adjust as needed
-p_default_template = r"^*\$performer"
+path_default_template = r"^*\$performer"
 
 # if unorganized, ignore other templates, use this path
-p_non_organized = r""
+path_non_organized = r""
 
 # option if tag is present
 # "tagname": [option]
@@ -102,7 +102,7 @@ p_non_organized = r""
 # inverse_performer: change the last/first name (Jane Doe -> Doe Jane)
 # dry_run: activate dry_run for this scene
 # ex: "plugin_move": ["clean_tag"]
-p_tag_option = {}
+path_tag_option = {}
 ######################################
 #               Logging              #
 
@@ -117,8 +117,8 @@ log_file = r""
 # rename associated file (subtitle, funscript) if present
 associated_extension = ["srt", "vtt", "funscript"]
 
-# use filename as title if no title is set
-# it will cause problem if you update multiple time the same scene without title.
+# use filename as a title if no title is set,
+# it will cause a problem if you update multiple time the same scene without a title.
 filename_as_title = True
 
 # Character which replaces every space in the filename
@@ -126,7 +126,7 @@ filename_as_title = True
 # e.g.:
 # "."
 # 2016-12-29.Eva.Lovia.-.Her.Fantasy.Ball
-filename_splitchar = " "
+filename_split_character = " "
 
 # replace space for stash field (title, performer...), if you have a title 'I love Stash' it can become 'I_love_Stash'
 field_whitespaceSeperator = ""
@@ -151,14 +151,14 @@ date_format = r"%Y-%m-%d"
 duration_format = r""
 
 # put the filename in lowercase
-lowercase_Filename = False
+lowercase_filename = False
 # filename in title case (Capitalises each word and lowercases the rest)
-titlecase_Filename = False
+titlecase_filename = False
 # remove these characters if there are present in the filename
-removecharac_Filename = ",#"
+remove_character_filename = ",#"
 
 # Character to use as a performer separator.
-performer_splitchar = " "
+performer_split_character = " "
 # Maximum number of performer names in the filename. If there are more than that in a scene the filename will not include any performer name!
 performer_limit = 3
 # The filename with have the name of performer before reaching the limit (if limit=3, the filename can contains 3 performers for a 4 performers scenes)
@@ -181,11 +181,11 @@ prevent_title_performer = False
 # remove consecutive (/FolderName/FolderName/video.mp4 -> FolderName/video.mp4
 prevent_consecutive = True
 # check when the file has moved that the old directory is empty, if empty it will remove it.
-remove_emptyfolder = True
+remove_empty_folder = True
 # the folder only contains 1 performer name. Else it will look the same as for filename
 path_one_performer = True
 # if there is no performer on the scene, the $performer field will be replaced by "NoPerformer" so a folder "NoPerformer" will be created
-path_noperformer_folder = False
+path_no_performer_folder = False
 # if the folder already have a performer name, it won't change it
 path_keep_alrperf = True
 

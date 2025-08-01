@@ -77,7 +77,7 @@ class FileOperations:
             f"Restoring the original path, error writing the logfile: {_error}"
           )
           return 1
-      if self.config.remove_emptyfolder:
+      if self.config.remove_empty_folder:
         with os.scandir(current_dir) as it:
           if not any(it):
             self.log.info(f"Removing empty folder ({current_dir})")

@@ -1,11 +1,9 @@
 import json
 import os
 import re
-import sqlite3
 import sys
 import time
 import traceback
-from datetime import datetime
 
 import stashapi.log as log
 from stashapi.stashapp import StashInterface
@@ -16,8 +14,8 @@ from config_operations import ConfigOperations
 from db_operations import DBOperations
 from file_operations import FileOperations
 from graphql_custom import graphql_getBuild
-from plugins.renamerOnUpdateDevelop.scene_information import SceneInformation
-from text_operations import TextOperations
+from scene_information import SceneInformation
+from text_operations import TextOperations, remove_consecutive
 
 IS_UNIDECODE_AVAILABLE: bool = helpers.is_module_available("unidecode")
 IS_CONFIG_AVAILABLE: bool = helpers.is_module_available("config")
@@ -71,44 +69,45 @@ dbOperations = DBOperations(log, config, stash)
 def get_template_path(_scene: dict):
   template = {"destination": "", "option": [], "opt_details": {}}
   # Change by Path
-  if config.p_path_templates:
-    for match, job in config.p_path_templates.items():
+  if config.path_path_templates:
+    for match, job in config.path_path_templates.items():
       if match in _scene["path"]:
         template["destination"] = job
         break
 
   # Change by Studio
-  if _scene.get("studio") and config.p_studio_templates:
+  if _scene.get("studio") and config.path_studio_templates:
     if "name" in _scene["studio"]:
       studio_name = _scene["studio"]["name"]
-      if config.p_studio_templates.get(studio_name):
-        template["destination"] = config.p_studio_templates[studio_name]
+      if config.path_studio_templates.get(studio_name):
+        template["destination"] = config.path_studio_templates[studio_name]
       # by Parent
       if _scene["studio"].get("parent_studio"):
-        if config.p_studio_templates.get(studio_name):
-          template["destination"] = config.p_studio_templates[studio_name]
+        if config.path_studio_templates.get(studio_name):
+          template["destination"] = config.path_studio_templates[studio_name]
 
   # Change by Tag
   tags = [x["name"] for x in _scene["tags"]]
-  if _scene.get("tags") and config.p_tag_templates:
-    for match, job in config.p_tag_templates.items():
+  if _scene.get("tags") and config.path_tag_templates:
+    for match, job in config.path_tag_templates.items():
       if match in tags:
         template["destination"] = job
         break
 
-  if _scene.get("tags") and config.p_tag_option:
+  if _scene.get("tags") and config.path_tag_option:
     for tag in _scene["tags"]:
-      if config.p_tag_option.get(tag["name"]):
-        opt = config.p_tag_option[tag["name"]]
+      if config.path_tag_option.get(tag["name"]):
+        opt = config.path_tag_option[tag["name"]]
         template.get("option").extend(opt)
         if "clean_tag" in opt:
           if template["opt_details"].get("clean_tag"):
             template["opt_details"]["clean_tag"].append(tag["id"])
           else:
             template["opt_details"] = {"clean_tag": [tag["id"]]}
-  if not _scene["organized"] and PATH_NON_ORGANIZED:
-    template["destination"] = PATH_NON_ORGANIZED
+  if not _scene["organized"] and config.path_non_organized:
+    template["destination"] = config.path_non_organized
   return template
+
 
 def field_replacer(text: str, scene_information: dict):
   field_found = re.findall(r"\$\w+", text)
@@ -131,7 +130,7 @@ def field_replacer(text: str, scene_information: dict):
       if (
         field_found[i + 1] == "$title"
         and scene_information.get("title")
-        and PREVENT_TITLE_PERF
+        and config.prevent_title_performer
       ):
         if re.search(
           f"^{scene_information['performer'].lower()}",
@@ -145,9 +144,9 @@ def field_replacer(text: str, scene_information: dict):
     replaced_word = scene_information.get(f)
     if not replaced_word:
       replaced_word = ""
-    if FIELD_REPLACER.get(f"${f}"):
+    if config.field_replacer.get(f"${f}"):
       replaced_word = replaced_word.replace(
-        FIELD_REPLACER[f"${f}"]["replace"], FIELD_REPLACER[f"${f}"]["with"]
+        config.field_replacer[f"${f}"]["replace"], config.field_replacer[f"${f}"]["with"]
       )
     if f == "title":
       title = replaced_word.strip()
@@ -169,8 +168,8 @@ def make_filename(scene_information: dict, query: str) -> str:
   r = textOperations.cleanup_text(r)
   if t:
     r = r.replace("$title", t)
-  # Replace spaces with splitchar
-  r = r.replace(" ", FILENAME_SPLITCHAR)
+  # Replace spaces with split character
+  r = r.replace(" ", config.filename_split_character)
   return r
 
 
@@ -189,37 +188,28 @@ def make_path(scene_information: dict, query: str) -> str:
 def create_new_filename(scene_info: dict, template: str):
   new_filename = (
     make_filename(scene_info, template)
-    + DUPLICATE_SUFFIX[scene_info["file_index"]]
+    + config.duplicate_suffix[scene_info["file_index"]]
     + scene_info["file_extension"]
   )
   log.debug("create_new_filename(new): {}".format(new_filename))
 
-  if FILENAME_LOWER:
+  if config.lowercase_filename:
     new_filename = new_filename.lower()
-  if FILENAME_TITLECASE:
+  if config.titlecase_filename:
     new_filename = textOperations.capitalize_words(new_filename)
   # Remove illegal character for Windows
   new_filename = re.sub("[/:\"*?<>|]+", "", new_filename)
 
-  if config.removecharac_Filename:
-    new_filename = re.sub(f"[{config.removecharac_Filename}]+", "", new_filename)
+  if config.remove_character_filename:
+    new_filename = re.sub(f"[{config.remove_character_filename}]+", "", new_filename)
 
-  # Trying to remove non-standard character
-  if IS_UNIDECODE_AVAILABLE and UNICODE_USE:
+  # Trying to remove non-standard characters
+  if IS_UNIDECODE_AVAILABLE and config.use_ascii:
     new_filename = unidecode.unidecode(new_filename, errors="preserve")
   else:
     # Using typewriter for Apostrophe
     new_filename = re.sub("[’‘”“]+", "'", new_filename)
   return new_filename
-
-
-def remove_consecutive(liste: list):
-  new_list = []
-  for i in range(0, len(liste)):
-    if i != 0 and liste[i] == liste[i - 1]:
-      continue
-    new_list.append(liste[i])
-  return new_list
 
 
 def create_new_path(scene_info: dict, template: dict):
@@ -245,7 +235,7 @@ def create_new_path(scene_info: dict, template: dict):
   if path_list[0] == "":
     path_split.insert(0, "")
 
-  if PREVENT_CONSECUTIVE:
+  if config.prevent_consecutive:
     # remove consecutive (/FolderName/FolderName/video.mp4 -> FolderName/video.mp4
     path_split = remove_consecutive(path_split)
 
@@ -255,23 +245,13 @@ def create_new_path(scene_info: dict, template: dict):
 
   path_edited = os.sep.join(path_split)
 
-  if config.removecharac_Filename:
-    path_edited = re.sub(f"[{config.removecharac_Filename}]+", "", path_edited)
+  if config.remove_character_filename:
+    path_edited = re.sub(f"[{config.remove_character_filename}]+", "", path_edited)
 
   # Using typewriter for Apostrophe
   new_path = re.sub("[’‘”“]+", "'", path_edited)
 
   return new_path
-
-
-def connect_db(path: str):
-  try:
-    sqlite_connection = sqlite3.connect(path, timeout=10)
-    log.debug("Python successfully connected to SQLite")
-    return sqlite_connection
-  except sqlite3.Error as error:
-    log.error(f"FATAL SQLITE Error: {error}")
-    return None
 
 
 def has_duplicate(path: str):
@@ -285,6 +265,7 @@ def has_duplicate(path: str):
     return True
   return False
 
+
 def prepare_scene_information(stash_scene):
   # Prepare `template`
   # Tags > Studios > Default
@@ -292,10 +273,10 @@ def prepare_scene_information(stash_scene):
   template["filename"] = fileOperations.get_template_filename(stash_scene)
   template["path"] = get_template_path(stash_scene)
   if not template["path"].get("destination"):
-    if config.p_use_default_template:
+    if config.path_use_default_template:
       log.debug("[PATH] Using default template")
       template["path"] = {
-        "destination": config.p_default_template,
+        "destination": config.path_default_template,
         "option": [],
         "opt_details": {},
       }
@@ -350,7 +331,7 @@ def prepare_scene_information(stash_scene):
       scene_information["new_directory"], scene_information["new_filename"]
     )
     # check the length of the final path
-    if IGNORE_PATH_LENGTH or len(scene_information["final_path"]) <= 240:
+    if config.ignore_path_length or len(scene_information["final_path"]) <= 240:
       break
 
   if scene_information["final_path"] == scene_information["current_path"]:
@@ -440,48 +421,6 @@ LOGFILE = config.log_file
 STASH_CONFIG = stash.get_configuration()
 STASH_DATABASE = STASH_CONFIG["general"]["databasePath"]
 DB_VERSION = graphql_getBuild(FRAGMENT_SERVER)
-
-# READING CONFIG
-ASSOCIATED_EXT = config.associated_extension
-
-FIELD_WHITESPACE_SEP = config.field_whitespaceSeperator
-FIELD_REPLACER = config.field_replacer
-
-FILENAME_LOWER = config.lowercase_Filename
-FILENAME_TITLECASE = config.titlecase_Filename
-FILENAME_SPLITCHAR = config.filename_splitchar
-
-PERFORMER_SPLITCHAR = config.performer_splitchar
-PERFORMER_LIMIT = config.performer_limit
-PERFORMER_LIMIT_KEEP = config.performer_limit_keep
-PERFORMER_SORT = config.performer_sort
-PREVENT_TITLE_PERF = config.prevent_title_performer
-
-DUPLICATE_SUFFIX = config.duplicate_suffix
-
-PREPOSITIONS_LIST = config.prepositions_list
-
-RATING_FORMAT = config.rating_format
-
-TAGS_SPLITCHAR = config.tags_splitchar
-TAGS_WHITELIST = config.tags_whitelist
-TAGS_BLACKLIST = config.tags_blacklist
-
-IGNORE_PATH_LENGTH = config.ignore_path_length
-
-PREVENT_CONSECUTIVE = config.prevent_consecutive
-REMOVE_EMPTY_FOLDER = config.remove_emptyfolder
-
-PROCESS_KILL = config.process_kill_attach
-UNICODE_USE = config.use_ascii
-
-# ORDER_SHORTFIELD = config.order_field
-# TODO: why?
-# ORDER_SHORTFIELD.insert(0, None)
-
-PATH_NOPERFORMER_FOLDER = config.path_noperformer_folder
-PATH_KEEP_ALRPERF = config.path_keep_alrperf
-PATH_NON_ORGANIZED = config.p_non_organized
 
 if PLUGIN_ARGS:
   if "bulk" in PLUGIN_ARGS:

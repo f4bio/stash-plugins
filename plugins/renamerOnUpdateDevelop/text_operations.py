@@ -1,6 +1,16 @@
 import difflib
 import re
 
+
+def remove_consecutive(_list: list):
+  new_list = []
+  for i in range(0, len(_list)):
+    if i != 0 and _list[i] == _list[i - 1]:
+      continue
+    new_list.append(_list[i])
+  return new_list
+
+
 class TextOperations:
   """Class with all the text operations"""
   log = None
@@ -143,7 +153,7 @@ class TextOperations:
     text = re.sub(r"\(\W*\)|\[\W*]|{[^a-zA-Z0-9]*}", "", text)
     text = re.sub(r"[{}]", "", text)
     text = self.remove_consecutive_non_word(text)
-    return text.strip(" -_.")
+    return text.strip(" -.")
 
 
   def remove_consecutive_non_word(self, text: str):

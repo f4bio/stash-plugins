@@ -292,5 +292,5 @@ fabric.properties
 
 /_site
 /.idea
-/stashdb.sqlite
+/stashdb.sqlite*
 /dummydata

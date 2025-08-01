@@ -230,7 +230,7 @@ class SceneInformation:
         else:
           self.log.info(f"Limited the amount of performer to {self.config.performer_limit}")
           perf_list = perf_list[0:self.config.performer_limit]
-      scene_performer = self.config.performer_splitchar.join(perf_list)
+      scene_performer = self.config.performer_split_character.join(perf_list)
       if perf_list:
         for p in perf_list:
           for perf in self.scene["performers"]:
@@ -240,10 +240,10 @@ class SceneInformation:
               if p == perf_name and perf.get("stash_ids"):
                 perf_list_stashid.append(perf["stash_ids"][0]["stash_id"])
                 break
-        scene_stashid_performer = self.config.performer_splitchar.join(perf_list_stashid)
+        scene_stashid_performer = self.config.performer_split_character.join(perf_list_stashid)
       if not self.config.path_one_performer:
-        scene_performer_path = self.config.performer_splitchar.join(perf_list)
-    elif self.config.path_noperformer_folder:
+        scene_performer_path = self.config.performer_split_character.join(perf_list)
+    elif self.config.path_no_performer_folder:
       scene_performer_path = "NoPerformer"
 
     # Grab Studio name
