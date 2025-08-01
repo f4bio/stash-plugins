@@ -62,7 +62,7 @@ class SceneInformation:
   video_codec = None
   year = None
 
-  def __init__(self, log, config, stash, scene):
+  def __init__(self, log, config, stash, scene: dict):
     self.config = config
     self.log = log
     self.stash = stash
@@ -80,6 +80,11 @@ class SceneInformation:
     self.scene_information = dict()
 
   def extract_info(self, template: dict):
+    self.log.debug("Extracting information from scene: {}".format(self.scene))
+
+    if len(self.scene["files"]) > 1:
+      self.log.warning(f"Scene has {len(self.scene["files"])} files. Only the first one will be used.")
+
     scene_path = str(self.scene.get("path"))
     scene_audio_codec = self.scene["file"]["audio_codec"].upper()
     scene_checksum = self.scene.get("checksum")
@@ -283,7 +288,7 @@ class SceneInformation:
         # ignore tag in blacklist
         if tag["name"] in self.config.tags_blacklist:
           continue
-        # check if there is a whitelist
+        # check if there is a allowlist
         if len(self.config.tags_whitelist) > 0:
           if tag["name"] in self.config.tags_whitelist:
             tag_list.append(tag["name"])
@@ -292,20 +297,20 @@ class SceneInformation:
       scene_tags = self.config.tags_splitchar.join(tag_list)
 
     scene_resolution = "SD"
-    scene_height = f"{self.scene['file']['height']}p"
+    scene_height = f"{self.scene["file"]["height"]}p"
     if self.scene["file"]["height"] >= 720:
       scene_resolution = "HD"
-    if self.scene["file"]["height"] >= 2160:
+    if self.scene["files"][0]["height"] >= 2160:
       scene_height = "4k"
       scene_resolution = "UHD"
-    if self.scene["file"]["height"] >= 2880:
+    if self.scene["files"][0]["height"] >= 2880:
       scene_height = "5k"
-    if self.scene["file"]["height"] >= 3384:
+    if self.scene["files"][0]["height"] >= 3384:
       scene_height = "6k"
-    if self.scene["file"]["height"] >= 4320:
+    if self.scene["files"][0]["height"] >= 4320:
       scene_height = "8k"
     # For Phone?
-    if self.scene["file"]["height"] > self.scene["file"]["width"]:
+    if self.scene["files"][0]["height"] > self.scene["files"][0]["width"]:
       scene_resolution = "VERTICAL"
 
     if self.scene.get("movies"):
@@ -370,3 +375,5 @@ class SceneInformation:
           self.scene_information[key] = [
             x.replace(" ", self.config.field_whitespaceSeperator) for x in value
           ]
+
+    return self.scene_information

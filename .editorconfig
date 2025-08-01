@@ -12,6 +12,6 @@ tab_width = 2
 [*.md]
 trim_trailing_whitespace = false
 
-[.py]
+[*.py]
 indent_size = 4
 tab_width = 4
