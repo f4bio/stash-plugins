@@ -20,6 +20,14 @@ https://f4bio.github.io/stash-plugins/main/index.yml
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
+## Deps
+
+### docker
+
+```bash
+docker exec stash sh -c "apk update && apk add py3-unidecode"
+```
+
 ## Plugins
 
 ### `renamerOnUpdate`

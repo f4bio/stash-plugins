@@ -1,16 +1,12 @@
 import difflib
 import re
 
-class StringOperations:
-  """Class with all the string operations"""
-  config = None
+class TextOperations:
+  """Class with all the text operations"""
   log = None
-  stash = None
 
-  def __init__(self, log, config, stash):
-    self.config = config
+  def __init__(self, log):
     self.log = log
-    self.stash = stash
 
   def find_diff_text(self, a: str, b: str):
     addi = minus = stay = ""
@@ -113,3 +109,49 @@ class StringOperations:
         return word.lower()
     # Apply the regex pattern and the process_word function.
     return re.sub(r"\b[A-Z]?[a-z\'\u2019\u2018]+\b", process_word, s)
+
+
+  def replace_text(self, text: str, replace_map: dict = None):
+    self.log.debug(f"replace_text text: {text}")
+    tmp = ""
+    for old, new in replace_map.items():
+      if type(new) is str:
+        new = [new]
+      if len(new) > 1:
+        if new[1] == "regex":
+          tmp = re.sub(old, new[0], text)
+          if tmp != text:
+            self.log.debug(f"Regex matched: {text} -> {tmp}")
+        else:
+          if new[1] == "word":
+            tmp = re.sub(rf"([\s_-])({old})([\s_-])", f"\\1{new[0]}\\3", text)
+          elif new[1] == "any":
+            tmp = text.replace(old, new[0])
+          if tmp != text:
+            self.log.debug(f"'{old}' changed with '{new[0]}'")
+      else:
+        tmp = re.sub(rf"([\s_-])({old})([\s_-])", f"\\1{new[0]}\\3", text)
+        if tmp != text:
+          self.log.debug(f"'{old}' changed with '{new[0]}'")
+      text = tmp
+    return tmp
+
+
+  def cleanup_text(self, text: str):
+    self.log.debug(f"cleanup_text text: {text}")
+
+    text = re.sub(r"\(\W*\)|\[\W*]|{[^a-zA-Z0-9]*}", "", text)
+    text = re.sub(r"[{}]", "", text)
+    text = self.remove_consecutive_non_word(text)
+    return text.strip(" -_.")
+
+
+  def remove_consecutive_non_word(self, text: str):
+    self.log.debug(f"remove_consecutive_non-word text: {text}")
+    for _ in range(0, 10):
+      m = re.findall(r"(\W+)\1+", text)
+      if m:
+        text = re.sub(r"(\W+)\1+", r"\1", text)
+      else:
+        break
+    return text

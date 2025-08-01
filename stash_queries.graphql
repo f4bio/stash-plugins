@@ -1,0 +1,24 @@
+mutation MoveFiles {
+  moveFiles(input: {ids: ["2"], destination_folder: "/data/tmp/", destination_basename: "test3.mp4"})
+}
+
+query Directory {
+  directory(path: "/data/moved") {
+    path
+    parent
+    directories
+  }
+}
+
+query FindScenes {
+  findScenes {
+    scenes {
+      id
+      title
+      files {
+        id
+        path
+      }
+    }
+  }
+}
