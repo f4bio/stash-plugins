@@ -1,5 +1,9 @@
 mutation MoveFiles {
-  moveFiles(input: {ids: ["2"], destination_folder: "/data/tmp/", destination_basename: "test3.mp4"})
+  moveFiles(input: {ids: ["1"], destination_folder: "/data/_unsorted/", destination_basename: "Sunflowerr.mp4"})
+}
+
+mutation MoveFiles($input: MoveFilesInput!) {
+  moveFiles(input: $input)
 }
 
 query Directory {

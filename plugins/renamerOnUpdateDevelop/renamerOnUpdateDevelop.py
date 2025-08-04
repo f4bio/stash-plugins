@@ -24,7 +24,7 @@ if IS_UNIDECODE_AVAILABLE:
     import unidecode  # pip install unidecode
 else:
     log.error(
-        f"Please install the 'unidecode' module via 'pip install unidecode', '[docker exec stash] apk install py3-unidecode'"
+        f"Please install the 'unidecode' module via 'pip install unidecode', '[docker exec stash] apk add py3-unidecode'"
     )
     sys.exit()
 
@@ -266,6 +266,39 @@ def has_duplicate(path: str):
     return False
 
 
+# def move_file(scene_id, new_directory, new_filename):
+#     # Select your transport with a defined url endpoint
+#     transport = AIOHTTPTransport(url="http://localhost:9999/graphql")
+#
+#     # Create a GraphQL client using the defined transport
+#     client = Client(transport=transport, fetch_schema_from_transport=True)
+#
+#     # Provide a GraphQL query
+#     query = gql(
+#         """
+#         mutation MoveFiles($input: MoveFilesInput!) { moveFiles(input: $input) }"
+#         """
+#     )
+#     query.variable_values = {
+#         "input": "blabla123"
+#     }
+#     # query.variable_values = {
+#     #     "input": {
+#     #         "ids": [
+#     #             scene_id
+#     #         ],
+#     #         "destination_folder": new_directory,
+#     #         "destination_basename": new_filename
+#     #     }
+#     # }
+#
+#     # Execute the query on the transport
+#     result = client.execute(query)
+#     log.debug("move file result: {}".format(result))
+#
+#     return result
+
+
 def renamer_ng(scene_id):
     stash_scene = stash.find_scene(id=scene_id)
 
@@ -301,6 +334,8 @@ def renamer_ng(scene_id):
 
     for i in range(0, len(stash_scene["files"])):
         scene_file = stash_scene["files"][i]
+        log.debug(f"[{stash_scene['id']}] Processing File #{i}: {scene_file}")
+
         # refractor file support
         for f in scene_file["fingerprints"]:
             if f.get("oshash"):
@@ -316,71 +351,81 @@ def renamer_ng(scene_id):
         if scene_file.get("frame_rate"):
             stash_scene["file"]["framerate"] = scene_file["frame_rate"]
 
-            # Prepare `scene_information`
-            scene_information = SceneInformation(log, config, stash, stash_scene).extract_info(template)
-            log.debug(f"[{stash_scene['id']}] Scene information: {scene_information}")
-            log.debug(f"[{stash_scene['id']}] Template: {template}")
+        # Prepare `scene_information`
+        scene_information = SceneInformation(log, config, stash, stash_scene).extract_info(template)
+        log.debug(f"[{stash_scene['id']}] Scene information: {scene_information}")
 
-            scene_information["scene_id"] = stash_scene["id"]
-            scene_information["file_index"] = i
+        scene_information["scene_id"] = stash_scene["id"]
+        scene_information["file_index"] = i
 
-            for removed_field in config.order_field:
-                if removed_field:
-                    if scene_information.get(removed_field.replace("$", "")):
-                        del scene_information[removed_field.replace("$", "")]
-                        log.warning(f"removed {removed_field} to reduce the length path")
-                    else:
-                        continue
-                if template["filename"]:
-                    scene_information["new_filename"] = create_new_filename(
-                        scene_information, template["filename"]
-                    )
+        for removed_field in config.order_field:
+            if removed_field:
+                if scene_information.get(removed_field.replace("$", "")):
+                    del scene_information[removed_field.replace("$", "")]
+                    log.warning(f"removed {removed_field} to reduce the length path")
                 else:
-                    scene_information["new_filename"] = scene_information[
-                        "current_filename"
-                    ]
-                if template.get("path"):
-                    scene_information["new_directory"] = create_new_path(
-                        scene_information, template
-                    )
-                else:
-                    scene_information["new_directory"] = scene_information[
-                        "current_directory"
-                    ]
-                scene_information["final_path"] = os.path.join(
-                    scene_information["new_directory"], scene_information["new_filename"]
+                    continue
+            if template["filename"]:
+                scene_information["new_filename"] = create_new_filename(
+                    scene_information, template["filename"]
                 )
-                # check the length of the final path
-                if config.ignore_path_length or len(scene_information["final_path"]) <= 240:
-                    break
-
-            if scene_information["final_path"] == scene_information["current_path"]:
-                log.info(f"Nothing to do. ({scene_information['current_filename']})")
-                return None
-
-            if scene_information["current_directory"] != scene_information["new_directory"]:
-                log.info("File will be moved to another directory")
-                log.debug(f"[OLD directory] {scene_information['current_directory']}")
-                log.debug(f"[NEW directory] {scene_information['new_directory']}")
-
-            if scene_information["current_filename"] != scene_information["new_filename"]:
-                log.info("The filename will be changed")
-                log.debug(f"[OLD filename] {scene_information['current_filename']}")
-                log.debug(f"[NEW filename] {scene_information['new_filename']}")
-
-            _result = stash.move_files([
-                {
-                    "ids": [
-                        scene_information["scene_id"]
-                    ],
-                    "destination_folder": scene_information["new_directory"],
-                    "destination_basename": scene_information["new_filename"]
-                }
-            ])
-            if _result:
-                log.info(f"Scene (id={scene_id}) moved")
             else:
-                log.error(f"Error when trying to move scene (id={scene_id})")
+                scene_information["new_filename"] = scene_information[
+                    "current_filename"
+                ]
+            if template.get("path"):
+                scene_information["new_directory"] = create_new_path(
+                    scene_information, template
+                )
+            else:
+                scene_information["new_directory"] = scene_information[
+                    "current_directory"
+                ]
+            scene_information["final_path"] = os.path.join(
+                scene_information["new_directory"], scene_information["new_filename"]
+            )
+            # check the length of the final path
+            if config.ignore_path_length or len(scene_information["final_path"]) <= 240:
+                break
+
+        if scene_information["final_path"] == scene_information["current_path"]:
+            log.info(f"Nothing to do. ({scene_information['current_filename']})")
+            continue
+
+        if scene_information["current_directory"] != scene_information["new_directory"]:
+            log.info("File will be moved to another directory")
+            log.debug(f"[OLD directory] {scene_information['current_directory']}")
+            log.debug(f"[NEW directory] {scene_information['new_directory']}")
+
+        if scene_information["current_filename"] != scene_information["new_filename"]:
+            log.info("The filename will be changed")
+            log.debug(f"[OLD filename] {scene_information['current_filename']}")
+            log.debug(f"[NEW filename] {scene_information['new_filename']}")
+
+        log.info("Moving file...")
+        log.debug(f"[FINAL ids] {scene_information['scene_id']}")
+        log.debug(f"[FINAL directory] {scene_information['new_directory']}")
+        log.debug(f"[FINAL filename] {scene_information['new_filename']}")
+
+        # _result = move_file(
+        #     scene_information["scene_id"],
+        #     scene_information["new_directory"],
+        #     scene_information["new_filename"]
+        # )
+
+        # _result = stash.destroy_files([scene_information["scene_id"]])
+
+        _result = stash.move_files(dict({
+            "ids": [
+                scene_information["scene_id"]
+            ],
+            "destination_folder": scene_information["new_directory"],
+            "destination_basename": scene_information["new_filename"]
+        }))
+        if _result:
+            log.info(f"Scene (id={stash_scene['id']}) moved")
+        else:
+            log.error(f"Error when trying to move scene (id={stash_scene['id']})")
 
     return None
 
