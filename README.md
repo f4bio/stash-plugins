@@ -67,4 +67,3 @@ docker cp ./dummydata/bbb_sunflower_1080p_60fps_normal.mp4 stash:/data/
 docker cp ./dummydata/bbb_sunflower_2160p_30fps_normal.mp4 stash:/data/
 docker cp ./dummydata/bbb_sunflower_2160p_60fps_normal.mp4 stash:/data/
 ```
-
