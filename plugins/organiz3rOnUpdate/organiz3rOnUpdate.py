@@ -59,6 +59,9 @@ def process_all_scenes():
 
         log.debug("extracted scene information: {}".format(json.dumps(scene_information)))
 
+        _studio = stash.find_studio(scene_information.studio)
+        log.debug("found studio: {}".format(_studio))
+
         _new_filename = make_filename(scene_information.filename)
         _new_directory = make_directory(scene_information.directory)
 
@@ -69,7 +72,7 @@ def process_all_scenes():
             "ids": [
                 scene_information.id
             ],
-            "destination_folder": scene_information.studio_hierarchy,
+            "destination_folder": scene_information.studio,
             "destination_basename": _new_filename
         }))
         log.debug("move result: {}".format(_result))

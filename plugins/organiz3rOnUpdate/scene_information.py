@@ -34,28 +34,16 @@ class SceneInformation:
     title = None
 
     # Date and year
-    date_format = None
-    year = None
+    date = None
 
     # Rating
     rating = None
 
     # Studio information
     studio = None
-    parent_studio = None
-    studio_family = None
-    studio_hierarchy = None
-
-    # Movie info
-    movie_title = None
-    movie_year = None
-    movie_index = None
-    movie_scene = None
 
     # Performers
-    performer = None
-    performer_path = None
-    stashid_performer = None
+    performers = None
 
     # Tags
     tags = None
@@ -104,62 +92,18 @@ class SceneInformation:
         self.title = raw_title
 
         # Date and year (date_format left for external formatting logic when available)
-        date_str = self.scene.get("date")
-        self.date_format = None
-        self.year = date_str[:4] if isinstance(date_str, str) and len(date_str) >= 4 else None
+        self.date = self.scene.get("date")
 
         # Rating (raw rating100 if available)
         self.rating = self.scene.get("rating100")
 
         # Studio information
-        studio_obj = self.scene.get("studio") or {}
-        self.studio = studio_obj.get("name")
-        self.parent_studio = (studio_obj.get("parent_studio") or {}).get("name") if studio_obj.get(
-            "parent_studio") else None
-        self.studio_family = self.parent_studio or self.studio
-        # Minimal hierarchy (best-effort without external lookups)
-        if self.studio or self.parent_studio:
-            hierarchy = []
-            if self.parent_studio:
-                hierarchy.append(self.parent_studio)
-            if self.studio:
-                hierarchy.append(self.studio)
-            self.studio_hierarchy = hierarchy
-        else:
-            self.studio_hierarchy = None
-
-        # Movie info
-        self.movie_title = None
-        self.movie_year = None
-        self.movie_index = None
-        self.movie_scene = None
-        movies = self.scene.get("movies") or []
-        if movies:
-            movie = movies[0].get("movie") or {}
-            self.movie_title = movie.get("name")
-            self.movie_year = movie.get("date")[:4] if movie.get("date") else None
-            idx = movies[0].get("scene_index")
-            self.movie_index = idx
-            self.movie_scene = f"scene {idx}" if isinstance(idx, int) else None
+        self.studio = self.scene.get("studio")
 
         # Performers
-        performers = self.scene.get("performers") or []
-        perf_names = [p.get("name") for p in performers if p.get("name")]
-        self.performer = ", ".join(perf_names) if perf_names else None
-        self.performer_path = perf_names[0] if perf_names else None
-        perf_stash_ids = []
-        for p in performers:
-            sid = (p.get("stash_ids") or [{}])[0].get("stash_id") if p.get("stash_ids") else None
-            if sid is not None:
-                perf_stash_ids.append(str(sid))
-        self.stashid_performer = ", ".join(perf_stash_ids) if perf_stash_ids else None
+        self.performers = self.scene.get("performers")
 
         # Tags
-        tags_list = self.scene.get("tags") or []
-        self.tags = ", ".join([t.get("name") for t in tags_list if t.get("name")]) if tags_list else None
-
-        # Template-related fields (not resolvable here)
-        self.template_split = None
-        self.date_format = None  # placeholder if external formatting applies later
+        self.tags = self.scene.get("tags")
 
         log.debug("Extracted information: {}".format(self))
