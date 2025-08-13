@@ -42,6 +42,7 @@ services:
       - ./stashdb.sqlite:/root/.stash/stash-go.sqlite
       - ./plugins/renamerOnUpdate:/root/.stash/plugins/community/renamerOnUpdate
       - ./plugins/renamerOnUpdateDevelop:/root/.stash/plugins/community/renamerOnUpdateDevelop
+      - ./plugins/organiz3rOnUpdate:/root/.stash/plugins/community/organiz3rOnUpdate
       # - ...
 
 volumes:

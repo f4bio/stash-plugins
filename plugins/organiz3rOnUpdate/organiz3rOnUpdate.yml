@@ -1,0 +1,23 @@
+name: Organiz3r On Update
+description: Organize your tags based on a template.
+version: 0.0.1
+url: https://github.com/f4bio/stash-plugins/
+exec:
+  - python
+  - "{pluginDir}/organiz3rOnUpdate.py"
+interface: raw
+settings:
+  useStudioHierarchy:
+    displayName: Use Studio hierarchy
+    description: Move scenes to the correct studio folder based on studio hierarchy
+    type: BOOLEAN
+hooks:
+  - name: Process Scene
+    description: Organize scene files
+    triggeredBy:
+      - Scene.Update.Post
+tasks:
+  - name: Process all
+    description: Process all scene files
+    defaultArgs:
+      mode: processScenes
