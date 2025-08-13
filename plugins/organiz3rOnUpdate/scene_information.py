@@ -37,15 +37,16 @@ class SceneInformation:
     title = None
     video_codec = None
     year = None
+    files = None
 
     def __init__(self, log, scene: dict):
         self.log = log
         self.scene = scene or {}
 
         file_info = self.scene.get("file") or {}
-        files_list = self.scene.get("files") or []
 
         # Basic path-derived properties
+        self.files = self.scene.get("files") or []
         self.path = str(self.scene.get("path")) if self.scene.get("path") is not None else None
         self.directory = os.path.dirname(self.path) if self.path else None
         self.directory_split = os.path.normpath(self.path).split(os.sep) if self.path else None
@@ -115,7 +116,7 @@ class SceneInformation:
         if movies:
             movie = movies[0].get("movie") or {}
             self.movie_title = movie.get("name")
-            self.movie_year = movie.get("date", None)[:4] if movie.get("date") else None
+            self.movie_year = movie.get("date")[:4] if movie.get("date") else None
             idx = movies[0].get("scene_index")
             self.movie_index = idx
             self.movie_scene = f"scene {idx}" if isinstance(idx, int) else None
