@@ -11,6 +11,10 @@ settings:
     displayName: Use Studio hierarchy
     description: Move scenes to the correct studio folder based on studio hierarchy
     type: BOOLEAN
+  useTags:
+    displayName: Use Tags
+    description: Move scenes to the correct folder based on specified tags. Commas separated; First come first serve; `<TAG>|<FOLDER>` pairs
+    type: STRING
 hooks:
   - name: Process Scene
     description: Organize scene files
