@@ -1,0 +1,27 @@
+name: Organizer On Update
+description: Organize your tags based on a template.
+version: 0.0.1
+url: https://github.com/f4bio/stash-plugins/
+exec:
+  - python
+  - "{pluginDir}/organizerOnUpdate.py"
+interface: raw
+settings:
+  useStudio:
+    displayName: Use Studio name
+    description: "Enter a comma-separated list of <STUDIO>-><FOLDER> pairs. The entries are processed in order (first come, first served). For example: \"BBB->/data/xxx/BBB, GGG->/data/xxx/GGG\"."
+    type: STRING
+  useTags:
+    displayName: Use Tags
+    description: "Enter a comma-separated list of <STUDIO>-><FOLDER> pairs. The pairs are processed on a first-come, first-served basis. For example: \"Amateur->/data/xxx/Amateur, Gangbang->/data/xxx/Gangbang\"."
+    type: STRING
+hooks:
+  - name: Process Scene
+    description: Organize scene files
+    triggeredBy:
+      - Scene.Update.Post
+tasks:
+  - name: Process all
+    description: Process all scene files
+    defaultArgs:
+      mode: processScenes

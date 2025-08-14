@@ -7,12 +7,12 @@ from stashapi.stashapp import StashInterface
 from scene_information import SceneInformation
 
 per_page = 100
-skip_tag = "[organiz3rOnUpdate: Skip]"
+skip_tag = "[organizerOnUpdate: Skip]"
 
 # Defaults if nothing has changed in the stash ui
 settings = {
-    "useStudioHierarchy": True,
-    "useTags": "Amateur|/data/xxx/Amateur,Gangbang|/data/xxx/Gangbang"
+    "useStudio": "BBB->/data/xxx/BBB,GGG->/data/xxx/GGG",
+    "useTags": "Amateur->/data/xxx/Amateur,Gangbang->/data/xxx/Gangbang"
 }
 
 json_input = json.loads(sys.stdin.read())
@@ -20,33 +20,47 @@ json_input = json.loads(sys.stdin.read())
 FRAGMENT_SERVER = json_input["server_connection"]
 stash = StashInterface(FRAGMENT_SERVER)
 config = stash.get_configuration()["plugins"]
-if "organiz3rOnUpdate" in config:
-    settings.update(config["organiz3rOnUpdate"])
-log.info("config: {} ".format(settings))
+if "organizerOnUpdate" in config:
+    settings.update(config["organizerOnUpdate"])
+log.info("settings: {} ".format(settings))
 
 
 def calculate_filename(filename: str):
     _filename = filename.lower()
+    _filename = _filename.replace(" ", "_")
 
     return _filename
 
 
 def calculate_directory_name(directory: str):
     _directory = directory.lower()
+    _directory = _directory.replace(" ", "_")
 
     return _directory
 
 
-def move_scene(stash_scene: SceneInformation, destination_directory: str, destination_filename: str):
-    log.debug("move_scene(stash_scene={}, destination_directory={}, destination_filename={})".format(stash_scene,
-                                                                                                     destination_directory,
-                                                                                                     destination_filename))
-    log.debug("_new_filename: {}".format(destination_filename))
-    log.debug("_new_directory: {}".format(destination_directory))
+def strip_ascii(text):
+    return "".join(
+        char for char
+        in text
+        if 31 < ord(char) < 127 or char in "\n\r"
+    )
+
+
+def clean_array_elements(arr):
+    return [strip_ascii(x) for x in [y.strip() for y in arr]]
+
+
+def move_scene(ids, destination_directory: str, destination_filename: str):
+    log.debug("move_scene()")
+
+    log.debug("ids: {}".format(ids))
+    log.debug("destination_filename: {}".format(destination_filename))
+    log.debug("destination_directory: {}".format(destination_directory))
 
     _result = stash.move_files(dict({
         "ids": [
-            stash_scene.id
+            ids
         ],
         "destination_folder": destination_directory,
         "destination_basename": destination_filename
@@ -57,36 +71,45 @@ def move_scene(stash_scene: SceneInformation, destination_directory: str, destin
 
 
 def process_single_scene(stash_scene: SceneInformation):
-    log.debug("processing single scene: {}".format(stash_scene))
+    log.debug("processing single scene {}".format(stash_scene))
 
-    # if the scene has [organiz3rOnUpdate: Skip] then skip it
+    # if the scene has [organizerOnUpdate: Skip] then skip it
     if skip_tag in stash_scene.tags:
         log.info("skipping scene")
         return None
 
     _new_filename = calculate_filename(stash_scene.filename)
-    _new_directory = "/tmp"
+    _new_directory = None
 
-    if settings["useStudioHierarchy"]:
-        log.debug("useStudioHierarchy(stash_scene)")
+    if settings["useStudio"]:
+        log.debug("useStudio()")
 
-        _studio = stash.find_studio(stash_scene.studio)
-        log.debug("found studio: {}".format(_studio))
+        _stash_studio = stash.find_studio(stash_scene.studio)
+        log.debug("found studio: {}".format(_stash_studio))
 
-        _new_directory = calculate_directory_name(stash_scene.studio)
+        _studioFolders = clean_array_elements(settings["useStudio"].split(","))
+        for _studioFolder in _studioFolders:
+            _studio, _folder = _studioFolder.split("->")
+            if _studio in _stash_studio["name"]:
+                _new_directory = calculate_directory_name(_folder)
+                break
 
     if settings["useTags"]:
-        log.debug("useTags(stash_scene)")
+        log.debug("useTags()")
 
-        _tagsFolders = settings["useTags"].split(",")
-
+        _tagsFolders = clean_array_elements(settings["useTags"].split(","))
         for _tagFolder in _tagsFolders:
-            _tag, _folder = _tagFolder.split("|")
+            _tag, _folder = _tagFolder.split("->")
             if _tag in stash_scene.tags:
                 _new_directory = calculate_directory_name(_folder)
                 break
 
-    move_scene(stash_scene, _new_directory, _new_filename)
+    if _new_filename and _new_directory:
+        move_scene(stash_scene.files[0].get("id"), _new_directory, _new_filename)
+    else:
+        log.info(
+            "no changes to scene. filename ('{}') or directory ('{}') not set".format(_new_filename, _new_directory))
+        log.info("skipping scene")
 
     return None
 
@@ -106,9 +129,8 @@ def process_all_scenes():
 
 
 if "mode" in json_input["args"]:
-    PLUGIN_ARGS = json_input["args"]["mode"]
-    log.debug("PLUGIN_ARGS: {}".format(PLUGIN_ARGS))
-    if "processScenes" in PLUGIN_ARGS:
+    log.debug("Plugin Args: {}".format(json_input["args"]))
+    if "processScenes" in json_input["args"]["mode"]:
         if "scene_id" in json_input["args"]:
             _stash_scene = stash.find_scene(json_input["args"]["scene_id"])
             _stash_scene_information = SceneInformation(_stash_scene)
@@ -119,6 +141,6 @@ if "mode" in json_input["args"]:
 elif "hookContext" in json_input["args"]:
     scene_id = json_input["args"]["hookContext"]["id"]
     if json_input["args"]["hookContext"]["type"] == "Scene.Update.Post":
-        stash.run_plugin_task("organiz3rOnUpdate", "Process all", args={"scene_id": scene_id})
+        stash.run_plugin_task("organizerOnUpdate", "Process all", args={"scene_id": scene_id})
 #        stash_scene = stash.find_scene(id)
 #        process_scene(stash_scene)
