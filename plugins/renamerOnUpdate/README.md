@@ -25,6 +25,15 @@ Using metadata from your Stash to rename/move your file.
     - [Path - Based on a Path](#path---based-on-a-path)
     - [Path - Change path no matter what](#path---change-path-no-matter-what)
     - [Path - Special Variables](#path---special-variables)
+  - [Exclude Functionality](#exclude-functionality)
+    - [Overview](#overview)
+    - [Configuration](#exclude-configuration)
+    - [Pattern Types](#pattern-types)
+    - [Exclude by Tags](#exclude-by-tags)
+    - [Exclude by Studios](#exclude-by-studios)
+    - [Exclude by File Paths](#exclude-by-file-paths)
+    - [Priority and Behavior](#priority-and-behavior)
+    - [Practical Examples](#practical-examples)
   - [Advanced](#advanced)
     - [Groups](#groups)
 
@@ -76,6 +85,7 @@ and configure the plugin before running it :exclamation: _**
 - Read/Edit `config.py`
   - Change template filename/path
   - Add `log_file` path
+  - Configure exclude patterns to prevent renaming specific scenes
 
 - There are multiple buttons in Task menu:
   - Enable: (default) Enable the trigger update
@@ -88,6 +98,11 @@ and configure the plugin before running it :exclamation: _**
     - You need to set a path for `log_file` in `renamerOnUpdate_config.py`
     - The format will be: `scene_id|current path|new path`. (e.g. `100|C:\Temp\foo.mp4|C:\Temp\bar.mp4`)
     - This file will be overwritten everytime the plugin is triggered.
+
+- Exclude functionality:
+  - Use exclude patterns to prevent specific scenes from being renamed
+  - Configure exclusions based on tags, studios, or file paths
+  - Excludes always take priority over includes
 
 ## Custom configuration file
 
@@ -235,6 +250,151 @@ in the current directory where the file is.
 - `C:\Temp\video.mp4` so  `^*=C:\Temp\`, result: `C:\Temp\Jane Doe\video.mp4`
 - If you don't use `prevent_consecutive` option,
 the plugin will create a new folder everytime (`C:\Temp\Jane Doe\Jane Doe\...\video.mp4`).
+
+### Exclude Functionality
+
+#### Overview
+
+The exclude functionality allows you to prevent specific scenes from being renamed based on tags, studios, or file paths. This is useful for:
+
+- Excluding temporary or work-in-progress content
+- Preventing renaming of test files
+- Skipping scenes in specific directories
+- Avoiding renaming scenes with certain tags or from specific studios
+
+**Important**: Exclude patterns always take priority over include patterns. If a scene matches any exclude pattern, it will not be renamed regardless of other configuration.
+
+#### Exclude Configuration
+
+To enable exclude functionality, set the following in your [`config.py`](renamerOnUpdate_config.py:283):
+
+```py
+# Enable/disable exclude functionality
+exclude_enabled = True
+```
+
+#### Pattern Types
+
+The exclude functionality supports two pattern matching types:
+
+- **`exact`**: Matches the exact string (case-sensitive)
+- **`regex`**: Matches using regular expressions for flexible pattern matching
+
+#### Exclude by Tags
+
+Exclude scenes that have specific tags using [`exclude_tag_patterns`](renamerOnUpdate_config.py:292):
+
+```py
+exclude_tag_patterns = {
+    "temp_content": {"type": "exact", "pattern": "temp"},
+    "test_scenes": {"type": "exact", "pattern": "test"},
+    "work_in_progress": {"type": "regex", "pattern": r"wip.*"},
+    "exclude_western": {"type": "exact", "pattern": "!1. Western"}
+}
+```
+
+**Examples:**
+- Scene with tag `temp` → **Excluded** (matches "temp_content" pattern)
+- Scene with tag `test` → **Excluded** (matches "test_scenes" pattern)
+- Scene with tag `wip_editing` → **Excluded** (matches "work_in_progress" regex)
+- Scene with tag `!1. Western` → **Excluded** (matches "exclude_western" pattern)
+
+#### Exclude by Studios
+
+Exclude scenes from specific studios (including parent studios) using [`exclude_studio_patterns`](renamerOnUpdate_config.py:301):
+
+```py
+exclude_studio_patterns = {
+    "test_studio": {"type": "exact", "pattern": "Test Studio"},
+    "temp_studios": {"type": "regex", "pattern": r".*temp.*"},
+    "amateur_content": {"type": "exact", "pattern": "Amateur"}
+}
+```
+
+**Examples:**
+- Scene from studio `Test Studio` → **Excluded** (matches "test_studio" pattern)
+- Scene from studio `TempStudio123` → **Excluded** (matches "temp_studios" regex)
+- Scene from parent studio `Amateur` → **Excluded** (matches "amateur_content" pattern)
+
+#### Exclude by File Paths
+
+Exclude scenes based on their current file path using [`exclude_path_patterns`](renamerOnUpdate_config.py:310):
+
+```py
+exclude_path_patterns = {
+    "temp_folder": {"type": "regex", "pattern": r".*[/\\]temp[/\\].*"},
+    "downloads": {"type": "regex", "pattern": r".*[/\\]Downloads[/\\].*"},
+    "specific_path": {"type": "exact", "pattern": r"E:\Movies\ToSort"},
+    "work_folder": {"type": "regex", "pattern": r".*[/\\]work[/\\].*"}
+}
+```
+
+**Examples:**
+- File at `C:\Videos\temp\video.mp4` → **Excluded** (matches "temp_folder" regex)
+- File at `D:\Downloads\movie.mp4` → **Excluded** (matches "downloads" regex)
+- File at `E:\Movies\ToSort\scene.mp4` → **Excluded** (matches "specific_path" exact)
+- File at `F:\work\editing\clip.mp4` → **Excluded** (matches "work_folder" regex)
+
+#### Priority and Behavior
+
+1. **Excludes Override Includes**: If a scene matches any exclude pattern, it will not be renamed regardless of tag templates, studio templates, or default templates.
+
+2. **Multiple Pattern Types**: You can combine exact and regex patterns within the same exclude category.
+
+3. **Case Sensitivity**: Exact matches are case-sensitive. Use regex patterns with case-insensitive flags if needed:
+   ```py
+   "case_insensitive": {"type": "regex", "pattern": r"(?i)temp.*"}
+   ```
+
+4. **Performance**: Exact matches are faster than regex patterns. Use exact matches when possible.
+
+#### Practical Examples
+
+**Example 1: Exclude Temporary Content**
+```py
+exclude_enabled = True
+
+exclude_tag_patterns = {
+    "temp": {"type": "exact", "pattern": "temp"},
+    "wip": {"type": "exact", "pattern": "work-in-progress"}
+}
+
+exclude_path_patterns = {
+    "temp_folders": {"type": "regex", "pattern": r".*[/\\](temp|tmp|temporary)[/\\].*"}
+}
+```
+
+**Example 2: Exclude Test Content**
+```py
+exclude_enabled = True
+
+exclude_tag_patterns = {
+    "test_content": {"type": "regex", "pattern": r"test.*"}
+}
+
+exclude_studio_patterns = {
+    "test_studio": {"type": "exact", "pattern": "Test Studio"}
+}
+
+exclude_path_patterns = {
+    "test_directories": {"type": "regex", "pattern": r".*[/\\]test[/\\].*"}
+}
+```
+
+**Example 3: Exclude Specific Studios and Paths**
+```py
+exclude_enabled = True
+
+exclude_studio_patterns = {
+    "amateur": {"type": "exact", "pattern": "Amateur"},
+    "temp_studios": {"type": "regex", "pattern": r".*temp.*"}
+}
+
+exclude_path_patterns = {
+    "downloads": {"type": "regex", "pattern": r".*[/\\]Downloads[/\\].*"},
+    "unsorted": {"type": "exact", "pattern": r"E:\Movies\Unsorted"}
+}
+```
 
 ### Advanced
 

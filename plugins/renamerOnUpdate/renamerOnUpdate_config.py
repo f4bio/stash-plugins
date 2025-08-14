@@ -275,3 +275,36 @@ process_kill_attach = False
 # Warning: If you have non-latin characters (Cyrillic, Kanji, Arabic, ...), the result will be extremely different.
 use_ascii = False
 # =========================
+
+######################################
+#            Exclude Settings        #
+
+# Enable/disable exclude functionality
+exclude_enabled = True
+
+# Exclude scenes based on tag patterns
+# Format: {"tag_name": {"type": "exact|regex", "pattern": "pattern_to_match"}}
+# Examples:
+# exclude_tag_patterns = {
+#     "!1. Western": {"type": "exact", "pattern": "!1. Western"},
+#     "temp": {"type": "regex", "pattern": r"temp.*"},
+# }
+exclude_tag_patterns = {}
+
+# Exclude scenes based on studio patterns (includes parent studios)
+# Format: {"studio_name": {"type": "exact|regex", "pattern": "pattern_to_match"}}
+# Examples:
+# exclude_studio_patterns = {
+#     "Test Studio": {"type": "exact", "pattern": "Test Studio"},
+#     "temp": {"type": "regex", "pattern": r"temp.*"},
+# }
+exclude_studio_patterns = {}
+
+# Exclude scenes based on file path patterns
+# Format: {"path_identifier": {"type": "exact|regex", "pattern": "pattern_to_match"}}
+# Examples:
+# exclude_path_patterns = {
+#     "temp_folder": {"type": "regex", "pattern": r".*[/\\]temp[/\\].*"},
+#     "specific_path": {"type": "exact", "pattern": r"E:\Movies\ToSort"},
+# }
+exclude_path_patterns = {}

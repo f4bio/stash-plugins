@@ -390,6 +390,145 @@ def check_longpath(path: str):
         return 1
 
 
+def matches_pattern(text: str, pattern_config: dict) -> bool:
+    """
+    Check if text matches a pattern configuration.
+    
+    Args:
+        text: The text to match against
+        pattern_config: Dictionary with 'type' and 'pattern' keys
+        
+    Returns:
+        bool: True if text matches the pattern
+    """
+    if not pattern_config or not text:
+        return False
+        
+    pattern_type = pattern_config.get("type", "exact")
+    pattern = pattern_config.get("pattern", "")
+    
+    if not pattern:
+        return False
+        
+    try:
+        if pattern_type == "regex":
+            return bool(re.search(pattern, text))
+        else:  # exact match
+            return text == pattern
+    except re.error as e:
+        log.LogError(f"Invalid regex pattern '{pattern}': {e}")
+        return False
+
+
+def is_path_excluded(file_path: str) -> bool:
+    """
+    Check if a file path should be excluded based on path patterns.
+    
+    Args:
+        file_path: The file path to check
+        
+    Returns:
+        bool: True if the path should be excluded
+    """
+    if not EXCLUDE_ENABLED or not EXCLUDE_PATH_PATTERNS:
+        return False
+        
+    for pattern_name, pattern_config in EXCLUDE_PATH_PATTERNS.items():
+        if matches_pattern(file_path, pattern_config):
+            log.LogInfo(f"Path excluded by pattern '{pattern_name}': {file_path}")
+            return True
+            
+    return False
+
+
+def is_studio_excluded(studio: dict) -> bool:
+    """
+    Check if a studio should be excluded based on studio patterns.
+    Includes checking parent studios.
+    
+    Args:
+        studio: The studio dictionary from the scene
+        
+    Returns:
+        bool: True if the studio should be excluded
+    """
+    if not EXCLUDE_ENABLED or not EXCLUDE_STUDIO_PATTERNS or not studio:
+        return False
+        
+    # Check current studio
+    studio_name = studio.get("name", "")
+    for pattern_name, pattern_config in EXCLUDE_STUDIO_PATTERNS.items():
+        if matches_pattern(studio_name, pattern_config):
+            log.LogInfo(f"Studio excluded by pattern '{pattern_name}': {studio_name}")
+            return True
+            
+    # Check parent studio
+    parent_studio = studio.get("parent_studio")
+    if parent_studio:
+        parent_name = parent_studio.get("name", "")
+        for pattern_name, pattern_config in EXCLUDE_STUDIO_PATTERNS.items():
+            if matches_pattern(parent_name, pattern_config):
+                log.LogInfo(f"Parent studio excluded by pattern '{pattern_name}': {parent_name}")
+                return True
+                
+    return False
+
+
+def is_tags_excluded(tags: list) -> bool:
+    """
+    Check if any tags should cause exclusion based on tag patterns.
+    
+    Args:
+        tags: List of tag dictionaries from the scene
+        
+    Returns:
+        bool: True if any tag matches exclusion patterns
+    """
+    if not EXCLUDE_ENABLED or not EXCLUDE_TAG_PATTERNS or not tags:
+        return False
+        
+    for tag in tags:
+        tag_name = tag.get("name", "")
+        for pattern_name, pattern_config in EXCLUDE_TAG_PATTERNS.items():
+            if matches_pattern(tag_name, pattern_config):
+                log.LogInfo(f"Tag excluded by pattern '{pattern_name}': {tag_name}")
+                return True
+                
+    return False
+
+
+def is_scene_excluded(scene: dict) -> bool:
+    """
+    Main exclusion check coordinator. Checks if a scene should be excluded
+    based on any of the configured exclusion patterns.
+    
+    Args:
+        scene: The scene dictionary
+        
+    Returns:
+        bool: True if the scene should be excluded
+    """
+    if not EXCLUDE_ENABLED:
+        return False
+        
+    # Check path exclusion
+    file_path = scene.get("path", "")
+    if is_path_excluded(file_path):
+        return True
+        
+    # Check studio exclusion
+    studio = scene.get("studio")
+    if is_studio_excluded(studio):
+        return True
+        
+    # Check tag exclusion
+    tags = scene.get("tags", [])
+    if is_tags_excluded(tags):
+        return True
+        
+    return False
+
+
 def get_template_filename(scene: dict):
     template = None
     # Change by Studio
@@ -1261,6 +1400,12 @@ def renamer(scene_id, db_conn=None):
                 stash_scene["checksum"] = f["checksum"]
         stash_scene["path"] = scene_file["path"]
         stash_scene["file"] = scene_file
+        
+        # Check if scene should be excluded (now that path is properly set)
+        if is_scene_excluded(stash_scene):
+            log.LogDebug(f"[{scene_id}] Scene excluded by exclude patterns")
+            return
+        
         if scene_file.get("bit_rate"):
             stash_scene["file"]["bit_rate"] = scene_file["bit_rate"]
         if scene_file.get("frame_rate"):
@@ -1332,11 +1477,13 @@ def renamer(scene_id, db_conn=None):
                 break
 
         if check_longpath(scene_information["final_path"]):
-            if (DRY_RUN or option_dryrun) and LOGFILE:
-                with open(DRY_RUN_FILE, "a", encoding="utf-8") as f:
-                    f.write(
-                        f"[LENGTH LIMIT] {scene_information['scene_id']}|{scene_information['final_path']}\n"
-                    )
+            if (DRY_RUN or option_dryrun):
+                log.LogInfo(f"[DRY-RUN] Would skip due to length limit: {scene_information['final_path']}")
+                if DRY_RUN_FILE:
+                    with open(DRY_RUN_FILE, "a", encoding="utf-8") as f:
+                        f.write(
+                            f"[LENGTH LIMIT] {scene_information['scene_id']}|{scene_information['final_path']}\n"
+                        )
             continue
 
         # log.LogDebug(f"Filename: {scene_information['current_filename']} -> {scene_information['new_filename']}")
@@ -1362,11 +1509,13 @@ def renamer(scene_id, db_conn=None):
                 log.LogDebug(f"[OLD filename] {scene_information['current_filename']}")
                 log.LogDebug(f"[NEW filename] {scene_information['new_filename']}")
 
-        if (DRY_RUN or option_dryrun) and LOGFILE:
-            with open(DRY_RUN_FILE, "a", encoding="utf-8") as f:
-                f.write(
-                    f"{scene_information['scene_id']}|{scene_information['current_path']}|{scene_information['final_path']}\n"
-                )
+        if (DRY_RUN or option_dryrun):
+            log.LogInfo(f"[DRY-RUN] Would rename: {scene_information['current_path']} -> {scene_information['final_path']}")
+            if DRY_RUN_FILE:
+                with open(DRY_RUN_FILE, "a", encoding="utf-8") as f:
+                    f.write(
+                        f"{scene_information['scene_id']}|{scene_information['current_path']}|{scene_information['final_path']}\n"
+                    )
             continue
         # check if there is already a file where the new path is
         err = checking_duplicate_db(scene_information)
@@ -1436,6 +1585,7 @@ def renamer(scene_id, db_conn=None):
     if not db_conn and stash_db:
         stash_db.close()
         log.LogInfo("[SQLITE] Database updated and closed!")
+
 
 
 def exit_plugin(msg=None, err=None):
@@ -1517,6 +1667,13 @@ TAGS_WHITELIST = config.tags_whitelist
 TAGS_BLACKLIST = config.tags_blacklist
 
 IGNORE_PATH_LENGTH = config.ignore_path_length
+
+# Exclude configuration
+EXCLUDE_ENABLED = config.exclude_enabled
+EXCLUDE_TAG_PATTERNS = config.exclude_tag_patterns
+EXCLUDE_STUDIO_PATTERNS = config.exclude_studio_patterns
+EXCLUDE_PATH_PATTERNS = config.exclude_path_patterns
+
 
 PREVENT_CONSECUTIVE = config.prevent_consecutive
 REMOVE_EMPTY_FOLDER = config.remove_emptyfolder
