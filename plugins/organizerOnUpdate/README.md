@@ -1,3 +1,3 @@
 # Organizer On Update
 
-Complete rewrite of renamerOnUpdate plugin
+Complete rewrite of the `renamerOnUpdate` plugin
