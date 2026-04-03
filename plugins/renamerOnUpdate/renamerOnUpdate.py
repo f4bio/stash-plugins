@@ -1065,23 +1065,34 @@ def db_rename_refactor(stash_db: sqlite3.Connection, scene_info):
             cursor.execute("SELECT id FROM folders WHERE path=?", [dir])
             parent_id = cursor.fetchall()
             if parent_id:
-                # create a new row with the new folder with the parent folder find above
                 folder_basename = os.path.basename(scene_info["new_directory"])
+                # Check if folder already exists by parent_folder_id + basename
+                # (path lookup above may fail due to normalization differences)
                 cursor.execute(
-                    "INSERT INTO 'main'.'folders'('id', 'path', 'basename', 'parent_folder_id', 'mod_time', 'created_at', 'updated_at', 'zip_file_id') VALUES (?, ?, ?, ?, ?, ?, ?, ?);",
-                    [
-                        new_id,
-                        scene_info["new_directory"],
-                        folder_basename,
-                        parent_id[0][0],
-                        mod_time,
-                        mod_time,
-                        mod_time,
-                        None,
-                    ],
+                    "SELECT id FROM folders WHERE parent_folder_id=? AND basename=?",
+                    [parent_id[0][0], folder_basename],
                 )
-                stash_db.commit()
-                folder_id = new_id
+                existing = cursor.fetchall()
+                if existing:
+                    folder_id = existing[0][0]
+                    log.LogDebug(f"Folder already exists in DB (found by parent+basename), reusing id={folder_id}")
+                else:
+                    # Create a new row for the new folder with the parent folder found above
+                    cursor.execute(
+                        "INSERT INTO 'main'.'folders'('id', 'path', 'basename', 'parent_folder_id', 'mod_time', 'created_at', 'updated_at', 'zip_file_id') VALUES (?, ?, ?, ?, ?, ?, ?, ?);",
+                        [
+                            new_id,
+                            scene_info["new_directory"],
+                            folder_basename,
+                            parent_id[0][0],
+                            mod_time,
+                            mod_time,
+                            mod_time,
+                            None,
+                        ],
+                    )
+                    stash_db.commit()
+                    folder_id = new_id
                 break
     else:
         folder_id = folder_id[0][0]
@@ -1162,11 +1173,11 @@ def file_rename(current_path: str, new_path: str, scene_info: dict):
     if os.path.isfile(new_path):
         log.LogInfo(f"[OS] File Renamed! ({current_path} -> {new_path})")
         try:
-            # Datei: chown nobody:users (UID 99, GID 100), chmod 664
+            # File: chown nobody:users (UID 99, GID 100), chmod 664
             os.chown(new_path, 99, 100)
             os.chmod(new_path, 0o664)
 
-            # Zielverzeichnis: chown nobody:users, chmod 775
+            # Target directory: chown nobody:users, chmod 775
             os.chown(new_dir, 99, 100)
             os.chmod(new_dir, 0o775)
 
