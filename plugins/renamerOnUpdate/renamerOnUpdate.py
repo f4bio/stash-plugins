@@ -30,9 +30,7 @@ import log
 try:
     import config
 except Exception:
-    log.LogWarning(
-        "Could not import ROU config file, did you rename the template file to 'config.py'? Defaulting to template config file"
-    )
+    log.LogWarning("Could not import ROU config file, did you rename the template file to 'config.py'? Defaulting to template config file")
     import renamerOnUpdate_config as config
 
 
@@ -388,145 +386,6 @@ def check_longpath(path: str):
             f"The path is too long ({len(path)} > 240). You can look at 'order_field'/'ignore_path_length' in config."
         )
         return 1
-
-
-def matches_pattern(text: str, pattern_config: dict) -> bool:
-    """
-    Check if text matches a pattern configuration.
-    
-    Args:
-        text: The text to match against
-        pattern_config: Dictionary with 'type' and 'pattern' keys
-        
-    Returns:
-        bool: True if text matches the pattern
-    """
-    if not pattern_config or not text:
-        return False
-        
-    pattern_type = pattern_config.get("type", "exact")
-    pattern = pattern_config.get("pattern", "")
-    
-    if not pattern:
-        return False
-        
-    try:
-        if pattern_type == "regex":
-            return bool(re.search(pattern, text))
-        else:  # exact match
-            return text == pattern
-    except re.error as e:
-        log.LogError(f"Invalid regex pattern '{pattern}': {e}")
-        return False
-
-
-def is_path_excluded(file_path: str) -> bool:
-    """
-    Check if a file path should be excluded based on path patterns.
-    
-    Args:
-        file_path: The file path to check
-        
-    Returns:
-        bool: True if the path should be excluded
-    """
-    if not EXCLUDE_ENABLED or not EXCLUDE_PATH_PATTERNS:
-        return False
-        
-    for pattern_name, pattern_config in EXCLUDE_PATH_PATTERNS.items():
-        if matches_pattern(file_path, pattern_config):
-            log.LogInfo(f"Path excluded by pattern '{pattern_name}': {file_path}")
-            return True
-            
-    return False
-
-
-def is_studio_excluded(studio: dict) -> bool:
-    """
-    Check if a studio should be excluded based on studio patterns.
-    Includes checking parent studios.
-    
-    Args:
-        studio: The studio dictionary from the scene
-        
-    Returns:
-        bool: True if the studio should be excluded
-    """
-    if not EXCLUDE_ENABLED or not EXCLUDE_STUDIO_PATTERNS or not studio:
-        return False
-        
-    # Check current studio
-    studio_name = studio.get("name", "")
-    for pattern_name, pattern_config in EXCLUDE_STUDIO_PATTERNS.items():
-        if matches_pattern(studio_name, pattern_config):
-            log.LogInfo(f"Studio excluded by pattern '{pattern_name}': {studio_name}")
-            return True
-            
-    # Check parent studio
-    parent_studio = studio.get("parent_studio")
-    if parent_studio:
-        parent_name = parent_studio.get("name", "")
-        for pattern_name, pattern_config in EXCLUDE_STUDIO_PATTERNS.items():
-            if matches_pattern(parent_name, pattern_config):
-                log.LogInfo(f"Parent studio excluded by pattern '{pattern_name}': {parent_name}")
-                return True
-                
-    return False
-
-
-def is_tags_excluded(tags: list) -> bool:
-    """
-    Check if any tags should cause exclusion based on tag patterns.
-    
-    Args:
-        tags: List of tag dictionaries from the scene
-        
-    Returns:
-        bool: True if any tag matches exclusion patterns
-    """
-    if not EXCLUDE_ENABLED or not EXCLUDE_TAG_PATTERNS or not tags:
-        return False
-        
-    for tag in tags:
-        tag_name = tag.get("name", "")
-        for pattern_name, pattern_config in EXCLUDE_TAG_PATTERNS.items():
-            if matches_pattern(tag_name, pattern_config):
-                log.LogInfo(f"Tag excluded by pattern '{pattern_name}': {tag_name}")
-                return True
-                
-    return False
-
-
-def is_scene_excluded(scene: dict) -> bool:
-    """
-    Main exclusion check coordinator. Checks if a scene should be excluded
-    based on any of the configured exclusion patterns.
-    
-    Args:
-        scene: The scene dictionary
-        
-    Returns:
-        bool: True if the scene should be excluded
-    """
-    if not EXCLUDE_ENABLED:
-        return False
-        
-    # Check path exclusion
-    file_path = scene.get("path", "")
-    if is_path_excluded(file_path):
-        return True
-        
-    # Check studio exclusion
-    studio = scene.get("studio")
-    if is_studio_excluded(studio):
-        return True
-        
-    # Check tag exclusion
-    tags = scene.get("tags", [])
-    if is_tags_excluded(tags):
-        return True
-        
-    return False
 
 
 def get_template_filename(scene: dict):
@@ -1206,21 +1065,34 @@ def db_rename_refactor(stash_db: sqlite3.Connection, scene_info):
             cursor.execute("SELECT id FROM folders WHERE path=?", [dir])
             parent_id = cursor.fetchall()
             if parent_id:
-                # create a new row with the new folder with the parent folder find above
+                folder_basename = os.path.basename(scene_info["new_directory"])
+                # Check if folder already exists by parent_folder_id + basename
+                # (path lookup above may fail due to normalization differences)
                 cursor.execute(
-                    "INSERT INTO 'main'.'folders'('id', 'path', 'parent_folder_id', 'mod_time', 'created_at', 'updated_at', 'zip_file_id') VALUES (?, ?, ?, ?, ?, ?, ?);",
-                    [
-                        new_id,
-                        scene_info["new_directory"],
-                        parent_id[0][0],
-                        mod_time,
-                        mod_time,
-                        mod_time,
-                        None,
-                    ],
+                    "SELECT id FROM folders WHERE parent_folder_id=? AND basename=?",
+                    [parent_id[0][0], folder_basename],
                 )
-                stash_db.commit()
-                folder_id = new_id
+                existing = cursor.fetchall()
+                if existing:
+                    folder_id = existing[0][0]
+                    log.LogDebug(f"Folder already exists in DB (found by parent+basename), reusing id={folder_id}")
+                else:
+                    # Create a new row for the new folder with the parent folder found above
+                    cursor.execute(
+                        "INSERT INTO 'main'.'folders'('id', 'path', 'basename', 'parent_folder_id', 'mod_time', 'created_at', 'updated_at', 'zip_file_id') VALUES (?, ?, ?, ?, ?, ?, ?, ?);",
+                        [
+                            new_id,
+                            scene_info["new_directory"],
+                            folder_basename,
+                            parent_id[0][0],
+                            mod_time,
+                            mod_time,
+                            mod_time,
+                            None,
+                        ],
+                    )
+                    stash_db.commit()
+                    folder_id = new_id
                 break
     else:
         folder_id = folder_id[0][0]
@@ -1300,6 +1172,18 @@ def file_rename(current_path: str, new_path: str, scene_info: dict):
     # checking if the move/rename work correctly
     if os.path.isfile(new_path):
         log.LogInfo(f"[OS] File Renamed! ({current_path} -> {new_path})")
+        try:
+            # File: chown nobody:users (UID 99, GID 100), chmod 664
+            os.chown(new_path, 99, 100)
+            os.chmod(new_path, 0o664)
+
+            # Target directory: chown nobody:users, chmod 775
+            os.chown(new_dir, 99, 100)
+            os.chmod(new_dir, 0o775)
+
+            log.LogDebug(f"Set permissions for file and directory ({new_path})")
+        except Exception as e:
+            log.LogWarning(f"Could not set file permissions: {e}")
         if LOGFILE:
             try:
                 with open(LOGFILE, "a", encoding="utf-8") as f:
@@ -1400,12 +1284,6 @@ def renamer(scene_id, db_conn=None):
                 stash_scene["checksum"] = f["checksum"]
         stash_scene["path"] = scene_file["path"]
         stash_scene["file"] = scene_file
-        
-        # Check if scene should be excluded (now that path is properly set)
-        if is_scene_excluded(stash_scene):
-            log.LogDebug(f"[{scene_id}] Scene excluded by exclude patterns")
-            return
-        
         if scene_file.get("bit_rate"):
             stash_scene["file"]["bit_rate"] = scene_file["bit_rate"]
         if scene_file.get("frame_rate"):
@@ -1477,13 +1355,11 @@ def renamer(scene_id, db_conn=None):
                 break
 
         if check_longpath(scene_information["final_path"]):
-            if (DRY_RUN or option_dryrun):
-                log.LogInfo(f"[DRY-RUN] Would skip due to length limit: {scene_information['final_path']}")
-                if DRY_RUN_FILE:
-                    with open(DRY_RUN_FILE, "a", encoding="utf-8") as f:
-                        f.write(
-                            f"[LENGTH LIMIT] {scene_information['scene_id']}|{scene_information['final_path']}\n"
-                        )
+            if (DRY_RUN or option_dryrun) and LOGFILE:
+                with open(DRY_RUN_FILE, "a", encoding="utf-8") as f:
+                    f.write(
+                        f"[LENGTH LIMIT] {scene_information['scene_id']}|{scene_information['final_path']}\n"
+                    )
             continue
 
         # log.LogDebug(f"Filename: {scene_information['current_filename']} -> {scene_information['new_filename']}")
@@ -1509,13 +1385,11 @@ def renamer(scene_id, db_conn=None):
                 log.LogDebug(f"[OLD filename] {scene_information['current_filename']}")
                 log.LogDebug(f"[NEW filename] {scene_information['new_filename']}")
 
-        if (DRY_RUN or option_dryrun):
-            log.LogInfo(f"[DRY-RUN] Would rename: {scene_information['current_path']} -> {scene_information['final_path']}")
-            if DRY_RUN_FILE:
-                with open(DRY_RUN_FILE, "a", encoding="utf-8") as f:
-                    f.write(
-                        f"{scene_information['scene_id']}|{scene_information['current_path']}|{scene_information['final_path']}\n"
-                    )
+        if (DRY_RUN or option_dryrun) and LOGFILE:
+            with open(DRY_RUN_FILE, "a", encoding="utf-8") as f:
+                f.write(
+                    f"{scene_information['scene_id']}|{scene_information['current_path']}|{scene_information['final_path']}\n"
+                )
             continue
         # check if there is already a file where the new path is
         err = checking_duplicate_db(scene_information)
@@ -1585,7 +1459,6 @@ def renamer(scene_id, db_conn=None):
     if not db_conn and stash_db:
         stash_db.close()
         log.LogInfo("[SQLITE] Database updated and closed!")
-
 
 
 def exit_plugin(msg=None, err=None):
@@ -1667,13 +1540,6 @@ TAGS_WHITELIST = config.tags_whitelist
 TAGS_BLACKLIST = config.tags_blacklist
 
 IGNORE_PATH_LENGTH = config.ignore_path_length
-
-# Exclude configuration
-EXCLUDE_ENABLED = config.exclude_enabled
-EXCLUDE_TAG_PATTERNS = config.exclude_tag_patterns
-EXCLUDE_STUDIO_PATTERNS = config.exclude_studio_patterns
-EXCLUDE_PATH_PATTERNS = config.exclude_path_patterns
-
 
 PREVENT_CONSECUTIVE = config.prevent_consecutive
 REMOVE_EMPTY_FOLDER = config.remove_emptyfolder
