@@ -1040,8 +1040,7 @@ def db_rename(stash_db: sqlite3.Connection, scene_info):
 
 
 def files_table_has_path(stash_db: sqlite3.Connection, folder_path: str, basename: str) -> bool:
-    """Return True if the files table already has a record at (folder_path, basename)
-    for a *different* file than the one we are about to update.
+    """Return True if the files table already has a record at (folder_path, basename).
     Used to detect file-level UNIQUE constraint conflicts before the OS move."""
     cursor = stash_db.cursor()
     cursor.execute("SELECT id FROM folders WHERE path=?", [folder_path])
@@ -1086,21 +1085,36 @@ def db_rename_refactor(stash_db: sqlite3.Connection, scene_info):
             cursor.execute("SELECT id FROM folders WHERE path=?", [dir])
             parent_id = cursor.fetchall()
             if parent_id:
-                # create a new row with the new folder with the parent folder find above
+                folder_basename = os.path.basename(scene_info["new_directory"])
+                # Check if folder already exists by (parent_folder_id, basename).
+                # Path lookup above may fail due to normalization differences.
                 cursor.execute(
-                    "INSERT INTO 'main'.'folders'('id', 'path', 'parent_folder_id', 'mod_time', 'created_at', 'updated_at', 'zip_file_id') VALUES (?, ?, ?, ?, ?, ?, ?);",
-                    [
-                        new_id,
-                        scene_info["new_directory"],
-                        parent_id[0][0],
-                        mod_time,
-                        mod_time,
-                        mod_time,
-                        None,
-                    ],
+                    "SELECT id FROM folders WHERE parent_folder_id=? AND basename=?",
+                    [parent_id[0][0], folder_basename],
                 )
-                stash_db.commit()
-                folder_id = new_id
+                existing = cursor.fetchall()
+                if existing:
+                    folder_id = existing[0][0]
+                    log.LogDebug(
+                        f"Folder already exists in DB (found by parent+basename), reusing id={folder_id}"
+                    )
+                else:
+                    # Create a new row for the new folder with the parent folder found above
+                    cursor.execute(
+                        "INSERT INTO 'main'.'folders'('id', 'path', 'basename', 'parent_folder_id', 'mod_time', 'created_at', 'updated_at', 'zip_file_id') VALUES (?, ?, ?, ?, ?, ?, ?, ?);",
+                        [
+                            new_id,
+                            scene_info["new_directory"],
+                            folder_basename,
+                            parent_id[0][0],
+                            mod_time,
+                            mod_time,
+                            mod_time,
+                            None,
+                        ],
+                    )
+                    stash_db.commit()
+                    folder_id = new_id
                 break
     else:
         folder_id = folder_id[0][0]
@@ -1120,9 +1134,8 @@ def db_rename_refactor(stash_db: sqlite3.Connection, scene_info):
                 file_id = f[0]
                 break
         if file_id:
-            # Check if another file record already occupies the target (parent_folder_id, basename).
-            # This can happen when multiple resolution variants of the same scene are renamed
-            # concurrently and both resolve to the same _Duplikat filename.
+            # Guard against UNIQUE(parent_folder_id, basename) conflict on the files table
+            # before issuing the UPDATE.
             cursor.execute(
                 "SELECT id FROM files WHERE parent_folder_id=? AND basename=? AND id!=?;",
                 [folder_id, scene_info["new_filename"], file_id],
@@ -1196,11 +1209,11 @@ def file_rename(current_path: str, new_path: str, scene_info: dict):
     if os.path.isfile(new_path):
         log.LogInfo(f"[OS] File Renamed! ({current_path} -> {new_path})")
         try:
-            # Datei: chown nobody:users (UID 99, GID 100), chmod 664
+            # File: chown nobody:users (UID 99, GID 100), chmod 664
             os.chown(new_path, 99, 100)
             os.chmod(new_path, 0o664)
 
-            # Zielverzeichnis: chown nobody:users, chmod 775
+            # Target directory: chown nobody:users, chmod 775
             os.chown(new_dir, 99, 100)
             os.chmod(new_dir, 0o775)
 
@@ -1439,10 +1452,11 @@ def renamer(scene_id, db_conn=None):
         else:
             stash_db = db_conn
         try:
-            # Check files table for (parent_folder_id, basename) conflict BEFORE moving
-            # the file on disk. This catches cases where two resolution variants of the
-            # same scene resolve to the same _Duplikat filename and the GraphQL duplicate
-            # check (which queries scenes, not files) missed the collision.
+            # Check the files table for a (parent_folder_id, basename) conflict BEFORE
+            # moving the file on disk. The GraphQL duplicate check queries scenes, not
+            # files, so it can miss conflicts when multiple resolution variants of the
+            # same scene are renamed concurrently and resolve to the same suffixed name
+            # (as configured via duplicate_suffix).
             target_dir = scene_information["new_directory"]
             target_base = scene_information["new_filename"]
             while files_table_has_path(stash_db, target_dir, target_base):
