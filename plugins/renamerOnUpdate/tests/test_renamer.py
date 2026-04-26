@@ -313,3 +313,113 @@ class TestGetMissingRequiredFields:
         info = {"studio": None, "year": "2024"}
         template = "/data/zugeord/$studio/$year"
         assert "$studio" in get_missing_required_fields(template, info)
+
+
+# ---------------------------------------------------------------------------
+# performer_sortGender logic
+# ---------------------------------------------------------------------------
+
+def sort_by_gender(perf_list: list, gender_map: dict, sort_order: list) -> list:
+    """Replicated from renamerOnUpdate.py for isolated testing."""
+    if not sort_order:
+        return perf_list
+
+    def _gender_order(name):
+        gender = gender_map.get(name, "UNDEFINED")
+        try:
+            return sort_order.index(gender)
+        except ValueError:
+            return len(sort_order)  # unlisted genders go last
+
+    return sorted(perf_list, key=_gender_order)
+
+
+class TestPerformerSortGender:
+
+    SORT_ORDER = [
+        "FEMALE",
+        "TRANSGENDER_FEMALE",
+        "NON_BINARY",
+        "INTERSEX",
+        "MALE",
+        "TRANSGENDER_MALE",
+        "UNDEFINED",
+    ]
+
+    def test_female_before_male(self):
+        perf_list = ["John", "Jane"]
+        gender_map = {"John": "MALE", "Jane": "FEMALE"}
+        result = sort_by_gender(perf_list, gender_map, self.SORT_ORDER)
+        assert result[0] == "Jane"
+
+    def test_only_males_no_blank(self):
+        # Without gender sort, both males; limit=1 would pick first by id.
+        # With sort, still picks a male — no blank.
+        perf_list = ["John", "Bob"]
+        gender_map = {"John": "MALE", "Bob": "MALE"}
+        result = sort_by_gender(perf_list, gender_map, self.SORT_ORDER)
+        assert len(result) == 2
+        assert set(result) == {"John", "Bob"}
+
+    def test_trans_female_before_male(self):
+        perf_list = ["John", "Lena"]
+        gender_map = {"John": "MALE", "Lena": "TRANSGENDER_FEMALE"}
+        result = sort_by_gender(perf_list, gender_map, self.SORT_ORDER)
+        assert result[0] == "Lena"
+
+    def test_trans_male_after_male(self):
+        perf_list = ["Alex", "Bob"]
+        gender_map = {"Alex": "TRANSGENDER_MALE", "Bob": "MALE"}
+        result = sort_by_gender(perf_list, gender_map, self.SORT_ORDER)
+        assert result[0] == "Bob"
+        assert result[1] == "Alex"
+
+    def test_non_binary_after_trans_female_before_male(self):
+        perf_list = ["John", "Sam", "Lena"]
+        gender_map = {"John": "MALE", "Sam": "NON_BINARY", "Lena": "TRANSGENDER_FEMALE"}
+        result = sort_by_gender(perf_list, gender_map, self.SORT_ORDER)
+        assert result[0] == "Lena"
+        assert result[1] == "Sam"
+        assert result[2] == "John"
+
+    def test_undefined_last(self):
+        perf_list = ["John", "Unknown"]
+        gender_map = {"John": "MALE", "Unknown": "UNDEFINED"}
+        result = sort_by_gender(perf_list, gender_map, self.SORT_ORDER)
+        assert result[-1] == "Unknown"
+
+    def test_unlisted_gender_goes_last(self):
+        # INTERSEX is in sort order but after NON_BINARY
+        perf_list = ["Jordan", "Alex"]
+        gender_map = {"Jordan": "INTERSEX", "Alex": "MALE"}
+        result = sort_by_gender(perf_list, gender_map, self.SORT_ORDER)
+        assert result[0] == "Jordan"
+
+    def test_empty_sort_order_preserves_list(self):
+        perf_list = ["John", "Jane"]
+        gender_map = {"John": "MALE", "Jane": "FEMALE"}
+        result = sort_by_gender(perf_list, gender_map, [])
+        assert result == ["John", "Jane"]
+
+    def test_female_limit_one_from_mixed(self):
+        # Simulates: performer_limit=1, 1 female + 2 males
+        perf_list = ["John", "Jane", "Bob"]
+        gender_map = {"John": "MALE", "Jane": "FEMALE", "Bob": "MALE"}
+        result = sort_by_gender(perf_list, gender_map, self.SORT_ORDER)
+        assert result[0] == "Jane"  # female is first → survives limit=1
+
+    def test_full_sort_order_all_genders(self):
+        perf_list = ["A", "B", "C", "D", "E", "F", "G"]
+        gender_map = {
+            "A": "UNDEFINED",
+            "B": "TRANSGENDER_MALE",
+            "C": "MALE",
+            "D": "INTERSEX",
+            "E": "NON_BINARY",
+            "F": "TRANSGENDER_FEMALE",
+            "G": "FEMALE",
+        }
+        result = sort_by_gender(perf_list, gender_map, self.SORT_ORDER)
+        expected_order = ["FEMALE", "TRANSGENDER_FEMALE", "NON_BINARY", "INTERSEX", "MALE", "TRANSGENDER_MALE", "UNDEFINED"]
+        result_genders = [gender_map[n] for n in result]
+        assert result_genders == expected_order
