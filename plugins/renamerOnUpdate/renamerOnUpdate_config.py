@@ -169,6 +169,33 @@ performer_sort = "id"
 # ignore certain gender. Available "MALE" "FEMALE" "TRANSGENDER_MALE" "TRANSGENDER_FEMALE" "INTERSEX" "NON_BINARY" "UNDEFINED"
 performer_ignoreGender = []
 
+# Sort performers by gender priority before applying performer_limit.
+# List genders in the order you want them to appear (first = highest priority).
+# Performers whose gender is not listed are sorted to the end.
+# Leave empty [] to disable gender sorting (default behaviour).
+#
+# All available genders in Stash:
+#   "FEMALE"             - cisgender female
+#   "MALE"               - cisgender male
+#   "TRANSGENDER_FEMALE" - trans woman (MTF)
+#   "TRANSGENDER_MALE"   - trans man (FTM)
+#   "INTERSEX"           - intersex
+#   "NON_BINARY"         - non-binary / genderqueer
+#   "UNDEFINED"          - no gender set in Stash
+#
+# Works together with performer_limit:
+#   performer_limit = 1
+#   performer_sortGender = ["FEMALE", "TRANSGENDER_FEMALE", "NON_BINARY", "MALE"]
+#   -> Scene with 2 male performers and no female: shows 1 male  (no blank $performer).
+#   -> Scene with 1 female and 2 males:            shows the female.
+#
+# This solves the blank $performer problem that occurs when using
+# performer_ignoreGender = ["MALE"] on a scene that has ONLY male performers.
+#
+# Recommended order (females and trans women first, then everyone else):
+# performer_sortGender = ["FEMALE", "TRANSGENDER_FEMALE", "NON_BINARY", "INTERSEX", "MALE", "TRANSGENDER_MALE", "UNDEFINED"]
+performer_sortGender = []
+
 # word attached at end if multiple file for same scene [FileRefactor]
 duplicate_suffix = ["", "_1", "_2", "_3", "_4", "_5", "_6", "_7", "_8", "_9", "_10"]
 
