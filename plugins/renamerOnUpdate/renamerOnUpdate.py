@@ -1286,6 +1286,58 @@ def associated_rename(scene_info: dict):
                         )
 
 
+def _matches_pattern(value: str, pattern_config: dict) -> bool:
+    """Check if a value matches a pattern config dict with type (exact|regex) and pattern."""
+    import re as _re
+    ptype = pattern_config.get("type", "exact")
+    pattern = pattern_config.get("pattern", "")
+    if ptype == "regex":
+        return bool(_re.search(pattern, value, _re.IGNORECASE))
+    # exact
+    return value.lower() == pattern.lower()
+
+
+def is_excluded(stash_scene: dict) -> bool:
+    """Return True if the scene should be excluded from renaming based on config patterns."""
+    if not EXCLUDE_ENABLED:
+        return False
+
+    # Check tag patterns
+    if EXCLUDE_TAG_PATTERNS:
+        scene_tags = [t.get("name", "") for t in stash_scene.get("tags", [])]
+        for _key, pat in EXCLUDE_TAG_PATTERNS.items():
+            for tag_name in scene_tags:
+                if _matches_pattern(tag_name, pat):
+                    log.LogDebug(f"Scene excluded by tag pattern '{pat['pattern']}' (matched '{tag_name}')")
+                    return True
+
+    # Check studio patterns (studio + parent studio)
+    if EXCLUDE_STUDIO_PATTERNS:
+        studios_to_check = []
+        if stash_scene.get("studio"):
+            studios_to_check.append(stash_scene["studio"].get("name", ""))
+            parent = stash_scene["studio"].get("parent_studio")
+            if parent:
+                studios_to_check.append(parent.get("name", ""))
+        for _key, pat in EXCLUDE_STUDIO_PATTERNS.items():
+            for studio_name in studios_to_check:
+                if studio_name and _matches_pattern(studio_name, pat):
+                    log.LogDebug(f"Scene excluded by studio pattern '{pat['pattern']}' (matched '{studio_name}')")
+                    return True
+
+    # Check path patterns
+    if EXCLUDE_PATH_PATTERNS:
+        current_path = stash_scene.get("path") or ""
+        if not current_path and stash_scene.get("files"):
+            current_path = stash_scene["files"][0].get("path", "")
+        for _key, pat in EXCLUDE_PATH_PATTERNS.items():
+            if current_path and _matches_pattern(current_path, pat):
+                log.LogDebug(f"Scene excluded by path pattern '{pat['pattern']}' (matched '{current_path}')")
+                return True
+
+    return False
+
+
 def renamer(scene_id, db_conn=None):
     option_dryrun = False
     if type(scene_id) is dict:
@@ -1300,6 +1352,10 @@ def renamer(scene_id, db_conn=None):
         and not PATH_NON_ORGANIZED
     ):
         log.LogDebug(f"[{scene_id}] Scene ignored (not organized)")
+        return
+
+    if is_excluded(stash_scene):
+        log.LogDebug(f"[{scene_id}] Scene excluded by exclude pattern")
         return
 
     # refractor file support
@@ -1629,6 +1685,12 @@ PATH_NOPERFORMER_FOLDER = config.path_noperformer_folder
 PATH_KEEP_ALRPERF = config.path_keep_alrperf
 PATH_NON_ORGANIZED = config.p_non_organized
 PATH_ONEPERFORMER = config.path_one_performer
+
+# Exclude settings - safe getattr for backwards compatibility with existing config.py files
+EXCLUDE_ENABLED = getattr(config, "exclude_enabled", False)
+EXCLUDE_TAG_PATTERNS = getattr(config, "exclude_tag_patterns", {})
+EXCLUDE_STUDIO_PATTERNS = getattr(config, "exclude_studio_patterns", {})
+EXCLUDE_PATH_PATTERNS = getattr(config, "exclude_path_patterns", {})
 
 DB_VERSION = graphql_getBuild()
 if DB_VERSION >= DB_VERSION_FILE_REFACTOR:
