@@ -1286,6 +1286,30 @@ def associated_rename(scene_info: dict):
                         )
 
 
+def get_missing_required_fields(template_str: str, scene_info: dict) -> list:
+    """
+    Return a list of required field names that are missing (null/empty) in scene_info.
+
+    Fields inside optional {} groups are excluded from this check — they are
+    designed to be silently dropped when empty. Only fields outside {} are
+    considered required.
+
+    Example: "{[$studio] }{$date - }$title"
+        - $studio and $date are optional (inside {})
+        - $title is required (outside {})
+    """
+    # Strip optional groups so only required field references remain
+    required_part = re.sub(r"\{[^{}]*\}", "", template_str)
+    required_fields = re.findall(r"\$(\w+)", required_part)
+    missing = []
+    for field in required_fields:
+        # Normalise: strip trailing underscore variants (e.g. performer_path)
+        key = field.strip("_")
+        if not scene_info.get(key):
+            missing.append(f"${field}")
+    return missing
+
+
 def _matches_pattern(value: str, pattern_config: dict) -> bool:
     """Check if a value matches a pattern config dict with type (exact|regex) and pattern."""
     import re as _re
@@ -1427,6 +1451,20 @@ def renamer(scene_id, db_conn=None):
 
         scene_information["scene_id"] = scene_id
         scene_information["file_index"] = i
+
+        # Check that all required (non-optional) template fields are present
+        if REQUIRE_FIELDS:
+            missing = []
+            if template.get("filename"):
+                missing += get_missing_required_fields(template["filename"], scene_information)
+            if template.get("path") and template["path"].get("destination"):
+                missing += get_missing_required_fields(template["path"]["destination"], scene_information)
+            if missing:
+                log.LogWarning(
+                    f"[{scene_id}] Skipping rename: required field(s) {missing} are empty. "
+                    f"Set require_fields = False in config to rename anyway."
+                )
+                continue
 
         for removed_field in ORDER_SHORTFIELD:
             if removed_field:
@@ -1691,6 +1729,9 @@ EXCLUDE_ENABLED = getattr(config, "exclude_enabled", False)
 EXCLUDE_TAG_PATTERNS = getattr(config, "exclude_tag_patterns", {})
 EXCLUDE_STUDIO_PATTERNS = getattr(config, "exclude_studio_patterns", {})
 EXCLUDE_PATH_PATTERNS = getattr(config, "exclude_path_patterns", {})
+
+# Require all template fields setting
+REQUIRE_FIELDS = getattr(config, "require_fields", True)
 
 DB_VERSION = graphql_getBuild()
 if DB_VERSION >= DB_VERSION_FILE_REFACTOR:

@@ -235,3 +235,81 @@ class TestDateParsing:
 
     def test_empty_string_returns_none(self):
         assert _parse_date("") is None
+
+
+# ---------------------------------------------------------------------------
+# get_missing_required_fields
+# ---------------------------------------------------------------------------
+
+def get_missing_required_fields(template_str: str, scene_info: dict) -> list:
+    """Replicated from renamerOnUpdate.py for isolated testing."""
+    import re
+    required_part = re.sub(r"\{[^{}]*\}", "", template_str)
+    required_fields = re.findall(r"\$(\w+)", required_part)
+    missing = []
+    for field in required_fields:
+        key = field.strip("_")
+        if not scene_info.get(key):
+            missing.append(f"${field}")
+    return missing
+
+
+class TestGetMissingRequiredFields:
+
+    def _info(self, **kwargs):
+        base = {"title": None, "date": None, "studio": None, "height": None, "performer": None}
+        base.update(kwargs)
+        return base
+
+    def test_all_required_present(self):
+        info = self._info(title="My Scene", date="2024-01-01", height="1080p")
+        assert get_missing_required_fields("$title - $date [$height]", info) == []
+
+    def test_title_missing(self):
+        info = self._info(date="2024-01-01", height="1080p")
+        missing = get_missing_required_fields("$title - $date [$height]", info)
+        assert "$title" in missing
+
+    def test_date_missing(self):
+        info = self._info(title="My Scene", height="1080p")
+        missing = get_missing_required_fields("$title - $date [$height]", info)
+        assert "$date" in missing
+
+    def test_optional_fields_not_checked(self):
+        # $studio and $date are optional (inside {}), only $title is required
+        info = self._info(title="My Scene")  # no studio, no date
+        template = "{[$studio] }{$date - }$title"
+        missing = get_missing_required_fields(template, info)
+        assert missing == []
+
+    def test_optional_field_missing_ignored(self):
+        info = self._info(title="My Scene")
+        template = "{$studio - }$title"
+        assert get_missing_required_fields(template, info) == []
+
+    def test_multiple_missing(self):
+        info = self._info()  # all None
+        missing = get_missing_required_fields("$title - $date [$height]", info)
+        assert "$title" in missing
+        assert "$date" in missing
+        assert "$height" in missing
+
+    def test_empty_template(self):
+        info = self._info(title="My Scene")
+        assert get_missing_required_fields("", info) == []
+
+    def test_all_optional(self):
+        # entire template is optional
+        info = self._info()
+        template = "{[$studio] }{$date - }{$title}"
+        assert get_missing_required_fields(template, info) == []
+
+    def test_path_template(self):
+        info = {"studio": "BangBros", "year": "2024"}
+        template = "/data/zugeord/$studio/$year"
+        assert get_missing_required_fields(template, info) == []
+
+    def test_path_template_missing_studio(self):
+        info = {"studio": None, "year": "2024"}
+        template = "/data/zugeord/$studio/$year"
+        assert "$studio" in get_missing_required_fields(template, info)
