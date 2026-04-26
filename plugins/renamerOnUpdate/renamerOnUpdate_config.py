@@ -277,34 +277,61 @@ use_ascii = False
 # =========================
 
 ######################################
-#            Exclude Settings        #
+#         Exclude Settings           #
+# ---------------------------------- #
+# Prevent specific scenes from being #
+# renamed or moved by this plugin.   #
+#                                    #
+# A scene is skipped when ANY of the #
+# configured patterns matches.       #
+#                                    #
+# Pattern types:                     #
+#   "exact"  - full case-insensitive #
+#              string comparison     #
+#   "regex"  - case-insensitive      #
+#              regular expression    #
+#                                    #
+# Set exclude_enabled = True to      #
+# activate. All three pattern dicts  #
+# are checked independently.         #
+######################################
 
-# Enable/disable exclude functionality
-exclude_enabled = True
+# Master switch - set to True to activate exclude filtering.
+# Defaults to False so existing setups are not affected.
+exclude_enabled = False
 
-# Exclude scenes based on tag patterns
-# Format: {"tag_name": {"type": "exact|regex", "pattern": "pattern_to_match"}}
-# Examples:
+# --- Exclude by Tag ---
+# Scene is skipped if any of its tags matches a pattern.
+# The dict key is just a human-readable label.
+#
 # exclude_tag_patterns = {
-#     "!1. Western": {"type": "exact", "pattern": "!1. Western"},
-#     "temp": {"type": "regex", "pattern": r"temp.*"},
+#     "wip":     {"type": "exact", "pattern": "WIP"},
+#     "western": {"type": "exact", "pattern": "!1. Western"},
+#     "temp":    {"type": "regex", "pattern": r"temp.*"},
 # }
 exclude_tag_patterns = {}
 
-# Exclude scenes based on studio patterns (includes parent studios)
-# Format: {"studio_name": {"type": "exact|regex", "pattern": "pattern_to_match"}}
-# Examples:
+# --- Exclude by Studio ---
+# Scene is skipped if its studio OR its parent studio matches.
+# Useful for excluding a whole network by matching the parent.
+#
 # exclude_studio_patterns = {
-#     "Test Studio": {"type": "exact", "pattern": "Test Studio"},
-#     "temp": {"type": "regex", "pattern": r"temp.*"},
+#     "test_studio": {"type": "exact", "pattern": "Test Studio"},
+#     "mindgeek":    {"type": "exact", "pattern": "MindGeek"},
+#     "temp":        {"type": "regex", "pattern": r".*temp.*"},
 # }
 exclude_studio_patterns = {}
 
-# Exclude scenes based on file path patterns
-# Format: {"path_identifier": {"type": "exact|regex", "pattern": "pattern_to_match"}}
-# Examples:
+# --- Exclude by File Path ---
+# Scene is skipped if its current file path matches.
+# Useful for protecting a specific folder from being touched.
+#
+# Linux/Mac (regex):
+#   "loeschen": {"type": "regex", "pattern": r".*/loeschen/.*"}
+# Windows (exact):
+#   "tosort":   {"type": "exact", "pattern": r"E:\Movies\ToSort"}
+#
 # exclude_path_patterns = {
-#     "temp_folder": {"type": "regex", "pattern": r".*[/\\]temp[/\\].*"},
-#     "specific_path": {"type": "exact", "pattern": r"E:\Movies\ToSort"},
+#     "loeschen": {"type": "regex", "pattern": r".*/loeschen/.*"},
 # }
 exclude_path_patterns = {}
