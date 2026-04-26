@@ -280,7 +280,7 @@ use_ascii = False
 #            Exclude Settings        #
 
 # Enable/disable exclude functionality
-exclude_enabled = True
+exclude_enabled = False
 
 # Exclude scenes based on tag patterns
 # Format: {"tag_name": {"type": "exact|regex", "pattern": "pattern_to_match"}}
