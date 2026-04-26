@@ -534,10 +534,22 @@ def extract_info(scene: dict, template: None):
     # Grab Date
     scene_information["date"] = scene.get("date")
     if scene_information["date"]:
-        date_scene = datetime.strptime(scene_information["date"], r"%Y-%m-%d")
-        scene_information["date_format"] = datetime.strftime(
-            date_scene, config.date_format
-        )
+        # Handle partial dates: Stash may return only YYYY or YYYY-MM instead of YYYY-MM-DD
+        raw_date = scene_information["date"]
+        date_scene = None
+        for fmt in (r"%Y-%m-%d", r"%Y-%m", r"%Y"):
+            try:
+                date_scene = datetime.strptime(raw_date, fmt)
+                break
+            except ValueError:
+                continue
+        if date_scene:
+            scene_information["date_format"] = datetime.strftime(
+                date_scene, config.date_format
+            )
+        else:
+            log.LogWarning(f"Could not parse date '{raw_date}', skipping date formatting")
+            scene_information["date"] = None
 
     # Grab Duration
     scene_information["duration"] = scene["file"]["duration"]
