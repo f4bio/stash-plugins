@@ -277,6 +277,30 @@ use_ascii = False
 # =========================
 
 ######################################
+#         Field Requirements         #
+# ---------------------------------- #
+# Skip the rename if a required      #
+# template field is null or empty.   #
+#                                    #
+# Fields inside {} optional groups   #
+# are NOT checked — they are already #
+# designed to be dropped when empty. #
+# Only fields outside {} count.      #
+#                                    #
+# Example template:                  #
+#   {[$studio] }{$date - }$title     #
+#   -> $studio and $date are optional#
+#   -> $title is REQUIRED            #
+#                                    #
+# Set to False to always rename,     #
+# even with incomplete metadata.     #
+######################################
+
+# Skip rename when required fields are missing (recommended: True).
+# Prevents filenames like "[1080p]_1.mp4" for unscraped scenes.
+require_fields = True
+
+######################################
 #         Exclude Settings           #
 # ---------------------------------- #
 # Prevent specific scenes from being #
