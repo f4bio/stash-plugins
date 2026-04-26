@@ -23,7 +23,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install requests
+        run: pip install requests pytest
 
       - name: Syntax check
         run: python3 -c "import ast, sys; ast.parse(open('plugins/renamerOnUpdate/renamerOnUpdate.py').read()); print('Syntax OK')"
