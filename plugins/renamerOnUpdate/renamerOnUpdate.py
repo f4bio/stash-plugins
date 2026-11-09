@@ -1421,6 +1421,9 @@ def renamer(scene_id, db_conn=None):
         template = {}
         template["filename"] = get_template_filename(stash_scene)
         template["path"] = get_template_path(stash_scene)
+        # p_tag_option applies to every matched tag, including filename-only ones
+        # such as "rename". Keep clean_tag even when the path template is dropped.
+        clean_tag_ids = template["path"]["opt_details"].get("clean_tag", [])
         if not template["path"].get("destination"):
             if config.p_use_default_template:
                 log.LogDebug("[PATH] Using default template")
@@ -1509,6 +1512,9 @@ def renamer(scene_id, db_conn=None):
 
         if scene_information["final_path"] == scene_information["current_path"]:
             log.LogInfo(f"Everything is ok. ({scene_information['current_filename']})")
+            # The tag's job is done, so clean it like after a rename.
+            if clean_tag_ids and not (DRY_RUN or option_dryrun):
+                graphql_removeScenesTag([scene_information["scene_id"]], clean_tag_ids)
             continue
 
         if scene_information["current_directory"] != scene_information["new_directory"]:
@@ -1610,12 +1616,8 @@ def renamer(scene_id, db_conn=None):
                 raise Exception("database update")
             if i == 0:
                 associated_rename(scene_information)
-            if template.get("path"):
-                if "clean_tag" in template["path"]["option"]:
-                    graphql_removeScenesTag(
-                        [scene_information["scene_id"]],
-                        template["path"]["opt_details"]["clean_tag"],
-                    )
+            if clean_tag_ids:
+                graphql_removeScenesTag([scene_information["scene_id"]], clean_tag_ids)
         except Exception as err:
             log.LogError(f"Error during database operation ({err})")
             if not db_conn:
