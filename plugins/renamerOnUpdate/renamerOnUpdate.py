@@ -636,6 +636,7 @@ def extract_info(scene: dict, template: None):
                     f"More than {PERFORMER_LIMIT} performer(s). Ignoring $performer"
                 )
                 perf_list = []
+                scene_information["performer_over_limit"] = True
             else:
                 log.LogInfo(f"Limited the amount of performer to {PERFORMER_LIMIT}")
                 perf_list = perf_list[0:PERFORMER_LIMIT]
@@ -1305,6 +1306,9 @@ def get_missing_required_fields(template_str: str, scene_info: dict) -> list:
     for field in required_fields:
         # Normalise: strip trailing underscore variants (e.g. performer_path)
         key = field.strip("_")
+        # performer_limit empties $performer on purpose; that is not missing metadata
+        if key in ("performer", "stashid_performer") and scene_info.get("performer_over_limit"):
+            continue
         if not scene_info.get(key):
             missing.append(f"${field}")
     return missing

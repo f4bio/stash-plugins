@@ -249,6 +249,8 @@ def get_missing_required_fields(template_str: str, scene_info: dict) -> list:
     missing = []
     for field in required_fields:
         key = field.strip("_")
+        if key in ("performer", "stashid_performer") and scene_info.get("performer_over_limit"):
+            continue
         if not scene_info.get(key):
             missing.append(f"${field}")
     return missing
@@ -313,6 +315,18 @@ class TestGetMissingRequiredFields:
         info = {"studio": None, "year": "2024"}
         template = "/data/zugeord/$studio/$year"
         assert "$studio" in get_missing_required_fields(template, info)
+
+    def test_performer_dropped_by_limit_is_not_missing(self):
+        # More performers than performer_limit: extract_info empties $performer
+        # on purpose and sets performer_over_limit. The scene must still rename.
+        info = self._info(title="My Scene", date="2024-01-01", height="1080p",
+                          performer="", performer_over_limit=True)
+        assert get_missing_required_fields("$date $performer $title [$height]", info) == []
+
+    def test_performer_without_any_performers_is_still_missing(self):
+        # No performers at all is missing metadata, so require_fields still skips.
+        info = self._info(title="My Scene", date="2024-01-01", height="1080p", performer="")
+        assert get_missing_required_fields("$date $performer $title [$height]", info) == ["$performer"]
 
 
 # ---------------------------------------------------------------------------
