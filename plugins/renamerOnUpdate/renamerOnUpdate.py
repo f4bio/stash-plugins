@@ -1441,7 +1441,13 @@ def renamer(scene_id, db_conn=None):
             template["filename"] = config.default_template
 
         if not template["filename"] and not template["path"]:
-            log.LogWarning(f"[{scene_id}] No template for this scene.")
+            msg = f"[{scene_id}] No template for this scene."
+            # The bulk task visits every scene and most have no template tag by
+            # design: one warning per scene buries the real ones.
+            if PLUGIN_ARGS:
+                log.LogDebug(msg)
+            else:
+                log.LogWarning(msg)
             return
 
         # log.LogDebug("Using this template: {}".format(filename_template))
