@@ -423,3 +423,85 @@ class TestPerformerSortGender:
         expected_order = ["FEMALE", "TRANSGENDER_FEMALE", "NON_BINARY", "INTERSEX", "MALE", "TRANSGENDER_MALE", "UNDEFINED"]
         result_genders = [gender_map[n] for n in result]
         assert result_genders == expected_order
+
+
+# ---------------------------------------------------------------------------
+# resolve_filename_template
+# ---------------------------------------------------------------------------
+
+def resolve_filename_template(template_str, fallback_template, scene_info):
+    missing = get_missing_required_fields(template_str, scene_info)
+    if not missing:
+        return template_str, [], False
+    if (
+        fallback_template
+        and fallback_template != template_str
+        and not get_missing_required_fields(fallback_template, scene_info)
+    ):
+        return fallback_template, missing, True
+    return template_str, missing, False
+
+
+class TestResolveFilenameTemplate:
+    TEMPLATE = "$studio - $date - $performer - $title"
+
+    def test_complete_scene_uses_template(self):
+        info = {"studio": "S", "date": "2020-01-01", "performer": "P", "title": "T"}
+        assert resolve_filename_template(self.TEMPLATE, "$title", info) == (self.TEMPLATE, [], False)
+
+    def test_missing_fields_use_fallback(self):
+        info = {"title": "Lovely Megan 2024"}
+        tpl, missing, used = resolve_filename_template(self.TEMPLATE, "$title", info)
+        assert (tpl, used) == ("$title", True)
+        assert missing == ["$studio", "$date", "$performer"]
+
+    def test_no_fallback_configured_skips(self):
+        info = {"title": "T"}
+        tpl, missing, used = resolve_filename_template(self.TEMPLATE, "", info)
+        assert tpl == self.TEMPLATE and used is False and missing
+
+    def test_fallback_also_missing_skips(self):
+        tpl, missing, used = resolve_filename_template(self.TEMPLATE, "$title", {})
+        assert tpl == self.TEMPLATE and used is False
+        assert "$title" in missing
+
+    def test_fallback_equal_to_template_not_used(self):
+        tpl, missing, used = resolve_filename_template("$title", "$title", {})
+        assert used is False and missing == ["$title"]
+
+    def test_optional_group_fallback(self):
+        info = {"title": "T"}
+        tpl, missing, used = resolve_filename_template("{$studio - }$title", "$title", info)
+        assert (tpl, missing, used) == ("{$studio - }$title", [], False)
+
+
+# ---------------------------------------------------------------------------
+# split_extension
+# ---------------------------------------------------------------------------
+
+import os
+
+
+def split_extension(path):
+    root, ext = os.path.splitext(path)
+    base = os.path.basename(path)
+    if not ext and base.startswith(".") and base.count(".") == 1 and len(base) > 1:
+        return path[: len(path) - len(base)], base
+    return root, ext
+
+
+class TestSplitExtension:
+    def test_normal_file(self):
+        assert split_extension("/a/b/Video.mp4") == ("/a/b/Video", ".mp4")
+
+    def test_file_named_only_by_extension(self):
+        assert split_extension("/a/b/.mp4") == ("/a/b/", ".mp4")
+
+    def test_no_extension(self):
+        assert split_extension("/a/b/Video") == ("/a/b/Video", "")
+
+    def test_multiple_dots(self):
+        assert split_extension("/a/b/My.Video.mkv") == ("/a/b/My.Video", ".mkv")
+
+    def test_dot_in_directory(self):
+        assert split_extension("/a.b/.mp4") == ("/a.b/", ".mp4")

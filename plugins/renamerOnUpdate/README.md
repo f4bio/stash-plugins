@@ -181,6 +181,26 @@ default_template  =  "$date $title"
 
 The file became: `C:\Temp\2008-05-20 - Big Buck Bunny.mp4`
 
+#### Filename - Fallback for scenes with missing metadata
+
+With `require_fields = True` (default) a scene is skipped when a required field of its template is empty. Fields inside `{}` are optional and are not checked.
+
+Set `fallback_template` to rename those scenes anyway, using a simpler template:
+
+```py
+use_default_template  =  True
+default_template  =  "$studio - $date - $performer - $title"
+fallback_template  =  "$title"
+```
+
+| scene metadata                       | new filename                              |
+|--------------------------------------|-------------------------------------------|
+| studio, date, performer and title    | `Blender Institute - 2008-05-20 - Big Buck Bunny.mp4` |
+| only the title                       | `Big Buck Bunny.mp4`                      |
+| nothing (no title)                   | skipped, the fallback cannot be filled either |
+
+The fallback only replaces the filename template. The scene is still skipped if the path template lacks required fields. Leave `fallback_template` empty (default) to keep skipping.
+
 ### Path
 
 Change your path (**C:\Temp**\\QmlnQnVja0J1bm55.mp4)

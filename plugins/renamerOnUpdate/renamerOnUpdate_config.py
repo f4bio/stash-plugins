@@ -327,6 +327,13 @@ use_ascii = False
 # Prevents filenames like "[1080p]_1.mp4" for unscraped scenes.
 require_fields = True
 
+# Filename template to use instead of skipping the rename when the template
+# above lacks required fields (only used if require_fields = True).
+# The fallback itself must be fillable, otherwise the scene is skipped.
+# Example: fallback_template = "$title" renames unscraped scenes after their title.
+# Leave empty to skip these scenes (default).
+fallback_template = ""
+
 ######################################
 #         Exclude Settings           #
 # ---------------------------------- #
