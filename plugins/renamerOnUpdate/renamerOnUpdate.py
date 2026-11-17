@@ -480,13 +480,26 @@ def sort_rating(d: dict):
     return new_d
 
 
+def split_extension(path: str):
+    """
+    Like os.path.splitext, but a file named only by its extension (".mp4") is
+    split into ("", ".mp4") instead of (".mp4", ""). Otherwise a rename would
+    drop the extension of such files.
+    """
+    root, ext = os.path.splitext(path)
+    base = os.path.basename(path)
+    if not ext and base.startswith(".") and base.count(".") == 1 and len(base) > 1:
+        return path[: len(path) - len(base)], base
+    return root, ext
+
+
 def extract_info(scene: dict, template: None):
     # Grabbing things from Stash
     scene_information = {}
 
     scene_information["current_path"] = str(scene["path"])
     # note: contain the dot (.mp4)
-    scene_information["file_extension"] = os.path.splitext(
+    scene_information["file_extension"] = split_extension(
         scene_information["current_path"]
     )[1]
     # note: basename contains the extension
@@ -1263,8 +1276,8 @@ def file_rename(current_path: str, new_path: str, scene_info: dict):
 def associated_rename(scene_info: dict):
     if ASSOCIATED_EXT:
         for ext in ASSOCIATED_EXT:
-            p = os.path.splitext(scene_info["current_path"])[0] + "." + ext
-            p_new = os.path.splitext(scene_info["final_path"])[0] + "." + ext
+            p = split_extension(scene_info["current_path"])[0] + "." + ext
+            p_new = split_extension(scene_info["final_path"])[0] + "." + ext
             if os.path.isfile(p):
                 try:
                     shutil.move(p, p_new)
@@ -1308,6 +1321,29 @@ def get_missing_required_fields(template_str: str, scene_info: dict) -> list:
         if not scene_info.get(key):
             missing.append(f"${field}")
     return missing
+
+
+def resolve_filename_template(template_str: str, fallback_template: str, scene_info: dict):
+    """
+    Pick the filename template to use for a scene.
+
+    Returns a tuple (template, missing, used_fallback):
+    - the template itself if all of its required fields are filled
+    - fallback_template if the template lacks required fields but the
+      fallback can be filled completely (e.g. "$title")
+    - otherwise the original template together with the missing fields, so the
+      caller can skip the rename
+    """
+    missing = get_missing_required_fields(template_str, scene_info)
+    if not missing:
+        return template_str, [], False
+    if (
+        fallback_template
+        and fallback_template != template_str
+        and not get_missing_required_fields(fallback_template, scene_info)
+    ):
+        return fallback_template, missing, True
+    return template_str, missing, False
 
 
 def _matches_pattern(value: str, pattern_config: dict) -> bool:
@@ -1456,13 +1492,23 @@ def renamer(scene_id, db_conn=None):
         if REQUIRE_FIELDS:
             missing = []
             if template.get("filename"):
-                missing += get_missing_required_fields(template["filename"], scene_information)
+                filename_template, missing_filename, used_fallback = resolve_filename_template(
+                    template["filename"], FALLBACK_TEMPLATE, scene_information
+                )
+                if used_fallback:
+                    log.LogInfo(
+                        f"[{scene_id}] required field(s) {missing_filename} are empty, "
+                        f"using fallback_template: {filename_template}"
+                    )
+                    template["filename"] = filename_template
+                else:
+                    missing += missing_filename
             if template.get("path") and template["path"].get("destination"):
                 missing += get_missing_required_fields(template["path"]["destination"], scene_information)
             if missing:
                 log.LogWarning(
                     f"[{scene_id}] Skipping rename: required field(s) {missing} are empty. "
-                    f"Set require_fields = False in config to rename anyway."
+                    f"Set require_fields = False or a fallback_template in config to rename anyway."
                 )
                 continue
 
@@ -1732,6 +1778,7 @@ EXCLUDE_PATH_PATTERNS = getattr(config, "exclude_path_patterns", {})
 
 # Require all template fields setting
 REQUIRE_FIELDS = getattr(config, "require_fields", True)
+FALLBACK_TEMPLATE = getattr(config, "fallback_template", "")
 
 DB_VERSION = graphql_getBuild()
 if DB_VERSION >= DB_VERSION_FILE_REFACTOR:
